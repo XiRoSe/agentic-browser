@@ -152,7 +152,7 @@ cd shell
 npm run dist
 ```
 
-Produces a 229MB NSIS installer at `dist-installer/Agentic-Browser-Setup-0.1.0.exe`. The build prebakes:
+Produces a ~240MB NSIS installer at `dist-installer/Agentic-Browser-Setup-0.1.0.exe`. The build prebakes:
 
 - The Python runtime + all deps via PyInstaller (`backend/agentic-backend.spec`)
 - The Playwright `chromium_headless_shell` (~270MB unpacked) staged from `%LOCALAPPDATA%\ms-playwright` into `shell/staged/` so it ships inside the installer
@@ -211,7 +211,7 @@ agentic-browser/
 
 ## Status
 
-v0.1 — desktop installer, intent + URL address bar, planner→scrapers→synthesizer pipeline, live sub-agent progress grid, BYO key for 3 providers, favorites, salvage on timeout, editorial-style HTML output with images and citations. Known follow-ups:
+v0.1 — desktop installer, intent + URL address bar, planner→scrapers→synthesizer pipeline, live sub-agent progress grid with per-card status and screenshots, BYO key for 3 providers, favorites, editorial-style HTML output with images and citations. Sub-agent runtime is governed by four stop signals (`blocked` / `budget` / `max_steps` / `stuck`), a hard browser-action cap, a swarm-level early-exit when N-1 sub-agents are done, and a salvage path that turns raw page text into best-effort Facts when an agent is cancelled or times out. Known follow-ups:
 
 - Code-sign the Windows installer
 - macOS + Linux build targets
