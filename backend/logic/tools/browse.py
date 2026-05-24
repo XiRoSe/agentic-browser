@@ -125,10 +125,21 @@ class BrowseSession:
         #   - accumulated text > word_cap (we have enough material; commit)
         # Subsequent tool calls return a STOP instruction the model usually obeys.
         self.abort_signal: Optional[str] = None
-        self.word_cap: int = 500  # tightened from "agent decides" to a hard hint
+        self.word_cap: int = 1000  # tightened from "agent decides" to a hard hint
 
     def _word_count(self) -> int:
-        return sum(len((c.get("text") or "").split()) for c in self.text_chunks)
+        """Count words across collected text chunks AFTER stripping any HTML/CSS/JS
+        tags so the cap reflects real prose, not markup noise."""
+        import re
+        total = 0
+        for c in self.text_chunks:
+            text = c.get("text") or ""
+            # Strip <script>...</script> and <style>...</style> bodies wholesale.
+            text = re.sub(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", " ", text, flags=re.I | re.S)
+            # Strip remaining tags.
+            text = re.sub(r"<[^>]+>", " ", text)
+            total += len(text.split())
+        return total
 
     @classmethod
     async def create(

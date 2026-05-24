@@ -68,7 +68,15 @@ async def run_scrapers(
     creds: LLMCreds,
     progress: Optional[ProgressCallback] = None,
     concurrency: Optional[int] = None,
+    word_cap: Optional[int] = None,
 ) -> list[ScrapeResult]:
+    """Fan out scrapers in parallel with an EARLY-EXIT trapdoor.
+
+    When N-1 of N scrapers are done AND total facts collected ≥ 3, the
+    remaining laggard is cancelled and synthesis proceeds. This stops a
+    single slow site from holding the user hostage at the wall-clock
+    timeout when the rest of the data is already in hand.
+    """
     sem = asyncio.Semaphore(concurrency or CONCURRENCY)
 
     async def one(job: ScrapeJob) -> ScrapeResult:
@@ -82,12 +90,54 @@ async def run_scrapers(
                 ))
             return cached_result
         async with sem:
-            result = await scrape(job, creds, progress)
+            result = await scrape(job, creds, progress, word_cap=word_cap)
         if result.status in ("ok", "partial") and result.facts:
             scrape_cache.put(job.url, job.goal, result.model_dump())
         return result
 
-    return await asyncio.gather(*(one(j) for j in jobs))
+    EARLY_EXIT_FACTS = 3   # need at least this many facts to dare cancel a laggard
+    N = len(jobs)
+    tasks = {asyncio.create_task(one(j)): j for j in jobs}
+    results_by_job: dict[ScrapeJob, ScrapeResult] = {}
+    pending = set(tasks.keys())
+
+    while pending:
+        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        for t in done:
+            try:
+                results_by_job[tasks[t]] = await t
+            except Exception as e:
+                log.warning("scrape task crashed for %s: %r", tasks[t].url, e)
+                results_by_job[tasks[t]] = ScrapeResult(
+                    job_url=tasks[t].url, status="failed", facts=[],
+                    error=f"task crashed: {e}",
+                )
+
+        total_facts = sum(len(r.facts) for r in results_by_job.values())
+        done_count = len(results_by_job)
+        if done_count >= max(1, N - 1) and total_facts >= EARLY_EXIT_FACTS and pending:
+            log.info(
+                "early-exit: %d/%d scrapers done with %d facts, cancelling %d laggard(s)",
+                done_count, N, total_facts, len(pending),
+            )
+            for t in pending:
+                t.cancel()
+                job = tasks[t]
+                results_by_job[job] = ScrapeResult(
+                    job_url=job.url, status="failed", facts=[],
+                    error="cancelled (early-exit — enough facts collected)",
+                )
+                if progress:
+                    await progress(ProgressEvent(
+                        job_url=job.url, status="failed", step=0, current_url=None,
+                        error="cancelled (enough facts)",
+                    ))
+            # Drain cancellations so they don't trigger "Task was destroyed" warnings.
+            await asyncio.gather(*pending, return_exceptions=True)
+            pending = set()
+
+    # Preserve original job order in the returned results.
+    return [results_by_job[j] for j in jobs]
 
 
 # ==================== Synthesize ====================
@@ -236,11 +286,14 @@ async def generate_view(
     progress: Optional[ProgressCallback] = None,
     scrape_timeout: Optional[int] = None,
     scrape_concurrency: Optional[int] = None,
+    word_cap: Optional[int] = None,
 ) -> tuple[str, int]:
     """Returns (html, total_facts_collected_across_all_scrapers).
 
     scrape_timeout (seconds, per sub-agent) and scrape_concurrency (max parallel
     sub-agents) override the planner defaults and the env-derived CONCURRENCY.
+    word_cap (words per sub-agent, post HTML-strip) tells each scraper to stop
+    and commit once it has gathered this much prose.
     """
     if progress:
         await progress(ProgressEvent(job_url=None, status="planning", step=0, current_url=None))
@@ -259,7 +312,7 @@ async def generate_view(
             await progress(ProgressEvent(
                 job_url=j.url, status="queued", step=0, current_url=j.url, goal=j.goal,
             ))
-    results = await run_scrapers(plan.jobs, creds, progress, concurrency=scrape_concurrency)
+    results = await run_scrapers(plan.jobs, creds, progress, concurrency=scrape_concurrency, word_cap=word_cap)
     total_facts = sum(len(r.facts) for r in results)
     total_images = sum(len(r.images) for r in results)
     successes = sum(1 for r in results if r.status in ("ok", "partial") and r.facts)

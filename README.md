@@ -80,10 +80,13 @@ Logic lives in `frontend/index.html → detectUrl()`. Anything multi-word is alw
 | Anthropic | `claude-sonnet-4-6` | `claude-haiku-4-5` |
 | Google | `gemini-2.5-pro` (thinking_budget=0) | `gemini-2.5-flash` |
 
-Both tiers are overrideable in **Settings → Advanced**. Two execution knobs are also exposed in Settings:
+Both tiers are overrideable in **Settings → Advanced**. Three execution knobs are also exposed in Settings:
 
 - **Per-agent timeout (sec)** — wall-clock per sub-agent, clamped 30–300, default 120.
 - **Concurrent agents** — max sub-agents running in parallel, clamped 1–10, default 6.
+- **Max words per agent** — once a sub-agent has gathered this many words of page text (post HTML-strip), the next tool call returns a STOP signal and it commits its ScrapeResult. Clamped 200–5000, default 1000.
+
+The orchestrator also **exits early**: when N-1 of N sub-agents are done and at least 3 facts have been collected, the remaining laggard is cancelled and synthesis starts immediately. Stops one slow site from holding the user hostage at the wall-clock timeout.
 
 Keys are sent per request as `X-LLM-Provider` and `X-LLM-Key` headers. The backend never writes them to disk; in Electron the encrypted blob lives in the OS keychain via `safeStorage`.
 

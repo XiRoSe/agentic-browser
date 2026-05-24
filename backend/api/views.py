@@ -153,6 +153,7 @@ async def render(
     x_scraper_model: Optional[str] = Header(None, alias="X-Scraper-Model"),
     x_scrape_timeout: Optional[str] = Header(None, alias="X-Scrape-Timeout"),
     x_scrape_concurrency: Optional[str] = Header(None, alias="X-Scrape-Concurrency"),
+    x_scrape_word_cap: Optional[str] = Header(None, alias="X-Scrape-Word-Cap"),
 ):
     if not force:
         cached = view_cache.get(user_id, intent)
@@ -164,6 +165,7 @@ async def render(
     creds = _read_creds(x_llm_provider, x_llm_key, x_orchestrator_model, x_scraper_model)
     scrape_timeout = _clamped_int(x_scrape_timeout, default=120, lo=30, hi=300)
     scrape_concurrency = _clamped_int(x_scrape_concurrency, default=6, lo=1, hi=10)
+    scrape_word_cap = _clamped_int(x_scrape_word_cap, default=1000, lo=200, hi=5000)
 
     progress = None
     if job_id:
@@ -178,6 +180,7 @@ async def render(
         html, facts_count = await generate_view(
             intent, creds=creds, user_id=user_id, progress=progress,
             scrape_timeout=scrape_timeout, scrape_concurrency=scrape_concurrency,
+            word_cap=scrape_word_cap,
         )
     except ViewAgentError as e:
         raise HTTPException(status_code=502, detail=f"View agent error: {e}")

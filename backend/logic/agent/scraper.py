@@ -94,12 +94,20 @@ async def scrape(
     job: ScrapeJob,
     creds: LLMCreds,
     progress: Optional[ProgressCallback] = None,
+    word_cap: Optional[int] = None,
 ) -> ScrapeResult:
-    """Run one focused sub-agent on one URL with its own browser context."""
+    """Run one focused sub-agent on one URL with its own browser context.
+
+    word_cap: when the agent has accumulated this many words of page text
+    (post HTML-strip), the next tool call returns a STOP instruction and the
+    agent commits its ScrapeResult instead of spinning further.
+    """
     started = time.monotonic()
     session: Optional[BrowseSession] = None
     try:
         session = await BrowseSession.create(progress=progress, job_url=job.url, goal=job.goal)
+        if word_cap:
+            session.word_cap = word_cap
         fetch_tool = make_fetch_tool(
             progress_callback=progress, job_url=job.url, goal=job.goal,
             image_sink=session.collected_images,
