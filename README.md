@@ -8,9 +8,13 @@ Bring your own LLM key — OpenAI, Anthropic, or Google. Keys are sent per reque
 
 ## Install
 
-Download the latest installer from [Releases](https://github.com/XiRoSe/agentic-browser/releases) and double-click it. Windows only for now; macOS / Linux build targets are stubbed but untested.
+Download the latest installer for Windows (~240 MB, self-contained):
 
-The installer is unsigned, so SmartScreen will show a *"Windows protected your PC"* warning on first launch. Click **More info → Run anyway**. It installs per-user (no admin password) to `%LOCALAPPDATA%\Programs\Agentic Browser\` and adds a Start menu shortcut.
+**→ [Agentic-Browser-Setup-0.1.0.exe](https://github.com/XiRoSe/agentic-browser/releases/download/v0.1.0/Agentic-Browser-Setup-0.1.0.exe)**
+
+Bundles the Python runtime, FastAPI backend, agno + OpenAI / Anthropic / Google SDKs, and Playwright Chromium — no prerequisites on the target machine. Double-click to install per-user (no admin password) to `%LOCALAPPDATA%\Programs\Agentic Browser\`. Adds a Start menu shortcut.
+
+The installer is unsigned, so SmartScreen will show *"Windows protected your PC"* on first launch. Click **More info → Run anyway**. macOS / Linux are not packaged yet.
 
 After installing, open the app, click ⚙ (top-right), pick your LLM provider, paste your API key, and you're ready.
 
@@ -80,24 +84,29 @@ Logic lives in `frontend/index.html → detectUrl()`. Anything multi-word is alw
 | Anthropic | `claude-sonnet-4-6` | `claude-haiku-4-5` |
 | Google | `gemini-2.5-pro` (thinking_budget=0) | `gemini-2.5-flash` |
 
-Both tiers are overrideable in **Settings → Advanced**. Three execution knobs are also exposed in Settings:
+Both tiers are overrideable in **Settings → LLM → Advanced**. Sub-agent runtime knobs live under **Settings → Agent**:
 
 - **Per-agent timeout (sec)** — wall-clock per sub-agent, clamped 30–300, default 120.
 - **Concurrent agents** — max sub-agents running in parallel, clamped 1–10, default 6.
-- **Max words per agent** — once a sub-agent has gathered this many words of page text (post HTML-strip), the next tool call returns a STOP signal and it commits its ScrapeResult. Clamped 200–5000, default 1000.
-
-The orchestrator also **exits early**: when N-1 of N sub-agents are done and at least 3 facts have been collected, the remaining laggard is cancelled and synthesis starts immediately. Stops one slow site from holding the user hostage at the wall-clock timeout.
-
-Keys are sent per request as `X-LLM-Provider` and `X-LLM-Key` headers. The backend never writes them to disk; in Electron the encrypted blob lives in the OS keychain via `safeStorage`.
+- **Max words per agent** — once a sub-agent has gathered this many words of page text (post HTML/CSS/JS strip), the next tool call returns a STOP signal and the agent commits its ScrapeResult. Clamped 200–5000, default 1000.
+- **Max browser steps** — hard cap on `browse_goto`/`click`/`type`/`back` actions per sub-agent. The tools refuse to run once the budget is gone. Clamped 1–30, default 12.
 
 ## Stop signals — when a sub-agent commits early
 
-Each sub-agent loops over its tools until it emits a `ScrapeResult`. To stop them from spinning forever, two stop signals fire from inside the tools themselves:
+Every sub-agent runs an LLM tool-call loop. Four signals can force it to commit a `ScrapeResult` early instead of grinding the full 120-second budget:
 
-- **403 on the first static fetch** → the next tool call returns a `stop: blocked` instruction; the agent commits `status="failed"`.
-- **≥500 accumulated words** across all fetches/reads → next tool call returns `stop: budget`; the agent commits the facts it has.
+| Signal | Triggers when… | Resulting status |
+|---|---|---|
+| `blocked` | The first `fetch_url` returns HTTP 403 | `failed` (`error="blocked (403)"`) |
+| `budget` | Accumulated word count (post HTML strip) ≥ word cap | `ok` / `partial` |
+| `max_steps` | Browser-action counter reaches the step cap | `partial` |
+| `stuck` | 5 consecutive browser steps don't add ≥50 new words | `failed` (`error="stuck (no progress)"`) |
 
-If neither fires and the per-agent wall clock elapses, the orchestrator **salvages** raw text chunks the agent had collected into best-effort Facts so the synthesizer still has something real to write from, instead of falling to an empty state.
+The orchestrator also **exits early** at the swarm level: when N-1 of N sub-agents are done and at least 3 facts have been collected, the remaining laggard is cancelled and synthesis starts immediately. One slow site can no longer hold the user hostage at the wall-clock timeout.
+
+If a sub-agent is cancelled or times out **with raw text already collected**, the orchestrator salvages those text chunks into best-effort Facts so the synthesizer still has real material to write from — instead of falling to a generic empty-state page.
+
+Keys are sent per request as `X-LLM-Provider` and `X-LLM-Key` headers. The backend never writes them to disk; in Electron the encrypted blob lives in the OS keychain via `safeStorage`.
 
 ## Run from source (dev)
 
