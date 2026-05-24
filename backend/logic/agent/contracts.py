@@ -49,7 +49,7 @@ class ScrapeJob(BaseModel):
     """A single 'go to URL X and find Y' assignment for one scraper sub-agent."""
     url: str = Field(..., description="The seed URL the scraper should start on.")
     goal: str = Field(..., description="Focused, one-sentence extraction goal — what facts to look for.")
-    max_steps: int = Field(8, description="Max browser navigation actions before the sub-agent must stop.")
+    max_steps: int = Field(12, description="Max browser navigation actions before the sub-agent must stop.")
     max_seconds: int = Field(120, description="Wall-clock budget for the whole sub-agent run.")
 
 

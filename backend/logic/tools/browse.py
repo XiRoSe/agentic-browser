@@ -126,6 +126,16 @@ class BrowseSession:
         # Subsequent tool calls return a STOP instruction the model usually obeys.
         self.abort_signal: Optional[str] = None
         self.word_cap: int = 1000  # tightened from "agent decides" to a hard hint
+        # Hard step cap — set by scraper.scrape() from job.max_steps. When the
+        # next browse_* tool call would exceed this, the tool returns a STOP
+        # instruction instead of running. Without this the LLM ignores the
+        # soft "Max browser actions" prompt hint and grinds for 30+ steps.
+        self.max_steps: Optional[int] = None
+        # Stuck-detection: if N consecutive browser steps don't increase the
+        # word count by >=50, abort. Wired below in the browse_* tools.
+        self.steps_since_progress: int = 0
+        self.last_word_count_seen: int = 0
+        self.stuck_threshold: int = 5
 
     def _word_count(self) -> int:
         """Count words across collected text chunks AFTER stripping any HTML/CSS/JS
@@ -231,14 +241,42 @@ def make_browse_tools(session: BrowseSession) -> list:
                 f"You have already gathered enough text (>{session.word_cap} words). "
                 "STOP using tools. Emit ScrapeResult NOW with the facts you have, "
                 "status='ok' or 'partial'.",
+            "max_steps":
+                f"You have used all {session.max_steps} browser-action steps. STOP using "
+                "tools. Emit ScrapeResult NOW with whatever facts you have, status='partial'.",
+            "stuck":
+                f"You have made {session.stuck_threshold} browser steps without gathering "
+                "new text — this site isn't yielding. STOP. Emit ScrapeResult NOW with "
+                "status='failed' and error='stuck (no progress)'.",
         }.get(reason, "Stop using tools and emit ScrapeResult now.")
         return json.dumps({"ok": False, "stop": True, "reason": reason, "instruction": msg})
+
+    def _check_budget_and_progress():
+        """After a step-incrementing tool finishes, see if we've hit the
+        word_cap (success) or stalled (failure). Set abort_signal accordingly."""
+        if session.abort_signal:
+            return
+        wc = session._word_count()
+        if wc >= session.word_cap:
+            session.abort_signal = "budget"
+            return
+        if wc > session.last_word_count_seen + 50:
+            # Real progress — reset the stuck counter.
+            session.last_word_count_seen = wc
+            session.steps_since_progress = 0
+        else:
+            session.steps_since_progress += 1
+            if session.steps_since_progress >= session.stuck_threshold:
+                session.abort_signal = "stuck"
 
     @tool(show_result=False)
     async def browse_goto(url: str) -> str:
         """Navigate the session to a URL. Use this before any other browse_* call."""
         if session.abort_signal:
             return _stop_instruction(session.abort_signal)
+        if session.max_steps is not None and session.steps >= session.max_steps:
+            session.abort_signal = "max_steps"
+            return _stop_instruction("max_steps")
         if session.page is None:
             return _err("session closed")
         session.steps += 1
@@ -259,6 +297,7 @@ def make_browse_tools(session: BrowseSession) -> list:
                     session.collected_images.extend(imgs)
             except Exception:
                 pass
+            _check_budget_and_progress()
             return _ok({"current_url": session.page.url, "status": resp.status if resp else None, "step": session.steps})
         except Exception as e:
             await session._emit("failed", action="goto")
@@ -276,13 +315,17 @@ def make_browse_tools(session: BrowseSession) -> list:
         await session._emit("reading", action=None)
         if text and len(text) > 200:
             session.text_chunks.append({"url": session.page.url, "title": "", "text": text})
-            if session._word_count() >= session.word_cap and not session.abort_signal:
-                session.abort_signal = "budget"
+        _check_budget_and_progress()
         return _ok({"current_url": session.page.url, "text": text, "chars": len(text)})
 
     @tool(show_result=False)
     async def browse_click(selector: str) -> str:
         """Click an element by CSS selector. Use `text=...` for text-match selectors. Increments step counter."""
+        if session.abort_signal:
+            return _stop_instruction(session.abort_signal)
+        if session.max_steps is not None and session.steps >= session.max_steps:
+            session.abort_signal = "max_steps"
+            return _stop_instruction("max_steps")
         if session.page is None:
             return _err("session closed")
         session.steps += 1
@@ -293,6 +336,7 @@ def make_browse_tools(session: BrowseSession) -> list:
             except Exception:
                 pass
             await session._emit("navigating", action="click", selector=selector)
+            _check_budget_and_progress()
             return _ok({"current_url": session.page.url, "step": session.steps})
         except Exception as e:
             await session._emit("failed", action="click", selector=selector)
@@ -301,6 +345,11 @@ def make_browse_tools(session: BrowseSession) -> list:
     @tool(show_result=False)
     async def browse_type(selector: str, text: str, press_enter: bool = False) -> str:
         """Type `text` into an input/textarea matched by CSS selector. Optionally press Enter after."""
+        if session.abort_signal:
+            return _stop_instruction(session.abort_signal)
+        if session.max_steps is not None and session.steps >= session.max_steps:
+            session.abort_signal = "max_steps"
+            return _stop_instruction("max_steps")
         if session.page is None:
             return _err("session closed")
         session.steps += 1
@@ -313,6 +362,7 @@ def make_browse_tools(session: BrowseSession) -> list:
                 except Exception:
                     pass
             await session._emit("navigating", action="type", selector=selector)
+            _check_budget_and_progress()
             return _ok({"current_url": session.page.url, "step": session.steps})
         except Exception as e:
             await session._emit("failed", action="type", selector=selector)
@@ -332,12 +382,18 @@ def make_browse_tools(session: BrowseSession) -> list:
     @tool(show_result=False)
     async def browse_back() -> str:
         """Go back one entry in the session's navigation history."""
+        if session.abort_signal:
+            return _stop_instruction(session.abort_signal)
+        if session.max_steps is not None and session.steps >= session.max_steps:
+            session.abort_signal = "max_steps"
+            return _stop_instruction("max_steps")
         if session.page is None:
             return _err("session closed")
         session.steps += 1
         try:
             await session.page.go_back(timeout=DEFAULT_GOTO_TIMEOUT_MS)
             await session._emit("navigating", action="back")
+            _check_budget_and_progress()
             return _ok({"current_url": session.page.url, "step": session.steps})
         except Exception as e:
             return _err(f"back failed: {e}")

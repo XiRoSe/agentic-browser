@@ -32,7 +32,7 @@ PLANNER_PROMPT = """You are the PLANNER for Agentic Browser. The user typed a na
 
 Return a ScrapePlan: {rationale, jobs: [{url, goal, max_steps, max_seconds}, ...]}
 
-Defaults: `max_steps=8`, `max_seconds=120`. Bump `max_steps` to 12 if the goal clearly requires navigation (e.g. clicking into a product page from a listing). Drop it to 4 for pages where the answer is obviously on the landing page (e.g. a news article).
+Defaults: `max_steps=12`, `max_seconds=120`. Drop `max_steps` to 4 for pages where the answer is obviously on the landing page (e.g. a news article); bump it to 16 only if a deep navigation chain is genuinely required.
 
 NEVER ask clarifying questions. Pick the most reasonable interpretation and go.
 """

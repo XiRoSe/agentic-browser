@@ -284,6 +284,7 @@
     </div>
     <div class="flex gap-1 -mb-px">
       <button class="settings-tab settings-tab-active px-3 py-2 text-sm font-medium text-slate-900 border-b-2 border-slate-900" data-pane="llm">LLM</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-900" data-pane="agents">Agent</button>
       <button class="settings-tab px-3 py-2 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-900" data-pane="data">Data &amp; Storage</button>
     </div>
   </div>
@@ -303,26 +304,6 @@
              class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
       <p id="settings-hint" class="text-[11px] text-slate-400 mt-1.5"></p>
     </div>
-    <div class="grid grid-cols-3 gap-3 pt-2 border-t border-slate-100">
-      <div>
-        <label class="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Per-agent timeout (sec)</label>
-        <input id="settings-timeout" type="number" min="30" max="300" step="10" placeholder="120"
-               class="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
-        <p class="text-[10px] text-slate-400 mt-1">30–300s.</p>
-      </div>
-      <div>
-        <label class="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Concurrent agents</label>
-        <input id="settings-concurrency" type="number" min="1" max="10" step="1" placeholder="6"
-               class="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
-        <p class="text-[10px] text-slate-400 mt-1">1–10.</p>
-      </div>
-      <div>
-        <label class="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Max words / agent</label>
-        <input id="settings-word-cap" type="number" min="200" max="5000" step="100" placeholder="1000"
-               class="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
-        <p class="text-[10px] text-slate-400 mt-1">200–5000. Stop signal.</p>
-      </div>
-    </div>
     <details class="group">
       <summary class="cursor-pointer text-[12px] text-slate-500 hover:text-slate-700 select-none">Advanced — model overrides</summary>
       <div class="mt-3 grid grid-cols-2 gap-3">
@@ -339,6 +320,37 @@
       </div>
     </details>
   </div><!-- /LLM pane -->
+
+  <!-- Agent pane -->
+  <div id="settings-pane-agents" class="settings-pane hidden px-6 py-5 space-y-4 overflow-y-auto">
+    <p class="text-xs text-slate-500">Tune how the sub-agents work. Sane defaults below — bump them up only when a render genuinely needs it.</p>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">Per-agent timeout (sec)</label>
+        <input id="settings-timeout" type="number" min="30" max="300" step="10" placeholder="120"
+               class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+        <p class="text-[11px] text-slate-400 mt-1">Wall-clock per sub-agent. 30–300s, default 120.</p>
+      </div>
+      <div>
+        <label class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">Concurrent agents</label>
+        <input id="settings-concurrency" type="number" min="1" max="10" step="1" placeholder="6"
+               class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+        <p class="text-[11px] text-slate-400 mt-1">Max sub-agents running in parallel. 1–10, default 6.</p>
+      </div>
+      <div>
+        <label class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">Max words / agent</label>
+        <input id="settings-word-cap" type="number" min="200" max="5000" step="100" placeholder="1000"
+               class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+        <p class="text-[11px] text-slate-400 mt-1">Stop signal once the agent has gathered this much prose (post HTML strip). 200–5000, default 1000.</p>
+      </div>
+      <div>
+        <label class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">Max browser steps</label>
+        <input id="settings-max-steps" type="number" min="1" max="30" step="1" placeholder="12"
+               class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+        <p class="text-[11px] text-slate-400 mt-1">Browser actions (goto/click/type) before the agent must commit. 1–30, default 12.</p>
+      </div>
+    </div>
+  </div><!-- /Agent pane -->
 
   <!-- Data & Storage pane -->
   <div id="settings-pane-data" class="settings-pane hidden px-6 py-5 space-y-5 overflow-y-auto">
@@ -1762,6 +1774,7 @@ function llmHeaders() {
   if (llmCreds.scrapeTimeout)     h['X-Scrape-Timeout'] = String(llmCreds.scrapeTimeout);
   if (llmCreds.scrapeConcurrency) h['X-Scrape-Concurrency'] = String(llmCreds.scrapeConcurrency);
   if (llmCreds.scrapeWordCap)     h['X-Scrape-Word-Cap'] = String(llmCreds.scrapeWordCap);
+  if (llmCreds.scrapeMaxSteps)    h['X-Scrape-Max-Steps'] = String(llmCreds.scrapeMaxSteps);
   return h;
 }
 
@@ -2049,6 +2062,24 @@ function paintOverlay(state, overlay) {
   }
 }
 
+function cardBodyFallback(d) {
+  // No screenshot yet — describe what the agent is doing so the card never
+  // looks "stalled" to the user. Static fetch_url never emits a screenshot,
+  // so a successful fetch-only scraper would otherwise sit on "waiting…".
+  const status = d.status || 'queued';
+  if (status === 'queued')      return 'queued — agent picking its first move';
+  if (status === 'planning')    return 'planning…';
+  if (status === 'navigating')  return d.action === 'fetch' ? 'fetching page (static)…' : 'opening page in browser…';
+  if (status === 'reading')     return 'reading page text…';
+  if (status === 'cache')       return 'cached — reused earlier result';
+  if (status === 'ok')          return `finished — ${d.factCount || 0} fact${d.factCount === 1 ? '' : 's'} extracted`;
+  if (status === 'partial')     return `partial — ${d.factCount || 0} fact${d.factCount === 1 ? '' : 's'} (timed out)`;
+  if (status === 'failed')      return d.error ? `failed — ${d.error}` : 'failed';
+  if (status === 'timeout')     return 'timed out — no usable text salvaged';
+  if (status === 'dropped')     return 'dropped — not relevant enough';
+  return status;
+}
+
 function renderScraperCard(d) {
   const isDropped = d.status === 'dropped';
   const card = document.createElement('div');
@@ -2082,10 +2113,10 @@ function renderScraperCard(d) {
       </div>
       <span class="text-[10px] text-slate-400 font-mono shrink-0">step ${d.step || 0}</span>
     </div>
-    <div class="flex-1 bg-slate-50 flex items-center justify-center min-h-[140px]">
+    <div class="flex-1 bg-slate-50 flex items-center justify-center min-h-[140px] p-3 text-center">
       ${d.shotB64
         ? `<img alt="" class="block w-full h-full object-cover object-top" src="data:image/jpeg;base64,${d.shotB64}">`
-        : `<span class="text-[11px] text-slate-400">waiting…</span>`}
+        : `<span class="text-[11px] text-slate-500">${escapeHtml(cardBodyFallback(d))}</span>`}
     </div>
     <div class="px-3 py-1 text-[10px] text-slate-500 truncate" title="${escapeHtml(d.error || statusText)}">${escapeHtml(statusText)}</div>
   `;
@@ -2325,6 +2356,7 @@ function openSettings(highlight = false) {
     $('settings-timeout').value     = llmCreds.scrapeTimeout     || '';
     $('settings-concurrency').value = llmCreds.scrapeConcurrency || '';
     $('settings-word-cap').value    = llmCreds.scrapeWordCap     || '';
+    $('settings-max-steps').value   = llmCreds.scrapeMaxSteps    || '';
   }
   if (highlight) $('settings-key').focus();
   updateSettingsModelHints();
@@ -2335,6 +2367,7 @@ async function closeSettings() {
     const timeout = parseInt($('settings-timeout').value, 10);
     const concurrency = parseInt($('settings-concurrency').value, 10);
     const wordCap = parseInt($('settings-word-cap').value, 10);
+    const maxSteps = parseInt($('settings-max-steps').value, 10);
     await saveCreds({
       provider: $('settings-provider').value,
       apiKey,
@@ -2343,6 +2376,7 @@ async function closeSettings() {
       scrapeTimeout:     Number.isFinite(timeout) && timeout > 0 ? timeout : undefined,
       scrapeConcurrency: Number.isFinite(concurrency) && concurrency > 0 ? concurrency : undefined,
       scrapeWordCap:     Number.isFinite(wordCap) && wordCap > 0 ? wordCap : undefined,
+      scrapeMaxSteps:    Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : undefined,
     });
   }
   const m = $('settings-modal');

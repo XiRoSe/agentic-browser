@@ -97,33 +97,38 @@ async def run_scrapers(
 
     EARLY_EXIT_FACTS = 3   # need at least this many facts to dare cancel a laggard
     N = len(jobs)
-    tasks = {asyncio.create_task(one(j)): j for j in jobs}
-    results_by_job: dict[ScrapeJob, ScrapeResult] = {}
-    pending = set(tasks.keys())
+    # Key everything by Task (always hashable), keep job alongside it.
+    job_for_task: dict[asyncio.Task, ScrapeJob] = {
+        asyncio.create_task(one(j)): j for j in jobs
+    }
+    results_by_task: dict[asyncio.Task, ScrapeResult] = {}
+    pending: set[asyncio.Task] = set(job_for_task.keys())
 
     while pending:
         done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
         for t in done:
+            job = job_for_task[t]
             try:
-                results_by_job[tasks[t]] = await t
+                results_by_task[t] = await t
             except Exception as e:
-                log.warning("scrape task crashed for %s: %r", tasks[t].url, e)
-                results_by_job[tasks[t]] = ScrapeResult(
-                    job_url=tasks[t].url, status="failed", facts=[],
+                log.warning("scrape task crashed for %s: %r", job.url, e)
+                results_by_task[t] = ScrapeResult(
+                    job_url=job.url, status="failed", facts=[],
                     error=f"task crashed: {e}",
                 )
 
-        total_facts = sum(len(r.facts) for r in results_by_job.values())
-        done_count = len(results_by_job)
+        total_facts = sum(len(r.facts) for r in results_by_task.values())
+        done_count = len(results_by_task)
         if done_count >= max(1, N - 1) and total_facts >= EARLY_EXIT_FACTS and pending:
             log.info(
                 "early-exit: %d/%d scrapers done with %d facts, cancelling %d laggard(s)",
                 done_count, N, total_facts, len(pending),
             )
-            for t in pending:
+            cancelled = list(pending)
+            for t in cancelled:
                 t.cancel()
-                job = tasks[t]
-                results_by_job[job] = ScrapeResult(
+                job = job_for_task[t]
+                results_by_task[t] = ScrapeResult(
                     job_url=job.url, status="failed", facts=[],
                     error="cancelled (early-exit — enough facts collected)",
                 )
@@ -133,11 +138,11 @@ async def run_scrapers(
                         error="cancelled (enough facts)",
                     ))
             # Drain cancellations so they don't trigger "Task was destroyed" warnings.
-            await asyncio.gather(*pending, return_exceptions=True)
+            await asyncio.gather(*cancelled, return_exceptions=True)
             pending = set()
 
     # Preserve original job order in the returned results.
-    return [results_by_job[j] for j in jobs]
+    return [results_by_task[t] for t in job_for_task.keys()]
 
 
 # ==================== Synthesize ====================
@@ -287,6 +292,7 @@ async def generate_view(
     scrape_timeout: Optional[int] = None,
     scrape_concurrency: Optional[int] = None,
     word_cap: Optional[int] = None,
+    max_steps: Optional[int] = None,
 ) -> tuple[str, int]:
     """Returns (html, total_facts_collected_across_all_scrapers).
 
@@ -298,10 +304,14 @@ async def generate_view(
     if progress:
         await progress(ProgressEvent(job_url=None, status="planning", step=0, current_url=None))
     plan = await plan_jobs(intent, creds)
-    # Honor the user's per-request timeout — overrides whatever the planner picked.
+    # Honor the user's per-request overrides — both timeout and step budget
+    # override whatever the planner picked per-job.
     if scrape_timeout:
         for j in plan.jobs:
             j.max_seconds = scrape_timeout
+    if max_steps:
+        for j in plan.jobs:
+            j.max_steps = max_steps
     if progress:
         # Tell the UI how many sub-agents to expect (for the N-of-M counter).
         await progress(ProgressEvent(

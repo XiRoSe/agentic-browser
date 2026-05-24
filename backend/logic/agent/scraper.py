@@ -108,6 +108,8 @@ async def scrape(
         session = await BrowseSession.create(progress=progress, job_url=job.url, goal=job.goal)
         if word_cap:
             session.word_cap = word_cap
+        # Hard cap: the browse_* tools will refuse to run once steps >= max_steps.
+        session.max_steps = job.max_steps
         fetch_tool = make_fetch_tool(
             progress_callback=progress, job_url=job.url, goal=job.goal,
             image_sink=session.collected_images,
