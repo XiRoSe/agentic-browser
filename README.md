@@ -4,7 +4,7 @@ A desktop browser whose address bar accepts **both URLs and natural-language int
 
 Bring your own LLM key — OpenAI, Anthropic, or Google. Keys are sent per request as headers and stored encrypted in the OS keychain on Electron, never persisted server-side.
 
-![Agentic Browser hero](docs/hero.png)
+![Agentic Browser demo](docs/demo.gif)
 
 ## Install
 

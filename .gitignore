@@ -41,6 +41,8 @@ hero-*.png
 mobile-*.png
 favorites-*.png
 topbar-*.png
+docs/_demo_frames/
+docs/_build_demo.py
 
 # ── OS / editor noise ──────────────────────────────────────────
 .DS_Store
