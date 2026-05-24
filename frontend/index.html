@@ -1,0 +1,2420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Browser</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+  /* Hero mesh background */
+  .mesh-bg {
+    background:
+      radial-gradient(at 20% 30%, rgba(99,102,241,0.18) 0px, transparent 50%),
+      radial-gradient(at 80% 20%, rgba(168,85,247,0.18) 0px, transparent 50%),
+      radial-gradient(at 70% 80%, rgba(236,72,153,0.15) 0px, transparent 50%),
+      radial-gradient(at 30% 90%, rgba(59,130,246,0.15) 0px, transparent 50%);
+    animation: meshShift 18s ease-in-out infinite alternate;
+  }
+  @keyframes meshShift { 0% { background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%; } 100% { background-position: 10% 10%, 90% 10%, 90% 90%, 10% 90%; } }
+
+  .orb { position: absolute; border-radius: 9999px; filter: blur(40px); opacity: 0.6; animation: float 12s ease-in-out infinite; }
+  .orb-1 { width: 280px; height: 280px; top: 8%; left: 12%; background: #818cf8; }
+  .orb-2 { width: 220px; height: 220px; top: 55%; right: 14%; background: #c084fc; animation-delay: -4s; }
+  .orb-3 { width: 180px; height: 180px; bottom: 18%; left: 28%; background: #f472b6; animation-delay: -8s; }
+  @keyframes float { 0%, 100% { transform: translateY(0) translateX(0) scale(1); } 33% { transform: translateY(-30px) translateX(20px) scale(1.05); } 66% { transform: translateY(20px) translateX(-15px) scale(0.95); } }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #4f46e5 0%, #a855f7 50%, #ec4899 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    background-size: 200% 200%; animation: gradientShift 6s ease infinite;
+  }
+  @keyframes gradientShift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+  .chip { transition: all 200ms ease; backdrop-filter: blur(8px); }
+  .chip:hover { transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(99,102,241,0.4); border-color: rgba(99,102,241,0.6); }
+
+  /* Chrome-style tabs — flex shrink down to a floor, then horizontal scroll */
+  .tab {
+    position: relative;
+    padding: 8px 14px 8px 14px;
+    background: rgb(241 245 249);
+    border: 1px solid rgb(226 232 240);
+    border-bottom: 1px solid transparent;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    margin-right: -1px;
+    color: rgb(71 85 105);
+    cursor: pointer;
+    transition: background 150ms ease;
+    flex: 1 1 auto;
+    min-width: 70px;     /* Chrome-ish floor: dot + tiny label + close */
+    max-width: 200px;    /* don't grow past this even if room */
+    display: flex; align-items: center; gap: 8px;
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1.2;
+    margin-bottom: -1px;
+  }
+  .tab.active { flex-shrink: 0; }   /* active tab keeps its size; others shrink first */
+  .tab:hover { background: rgb(248 250 252); color: rgb(15 23 42); }
+  .tab.active {
+    background: rgb(255 255 255);
+    color: rgb(15 23 42);
+    font-weight: 500;
+    z-index: 2;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.02);
+  }
+  .tab.dragging { opacity: 0.4; }
+  .tab.drop-before::before,
+  .tab.drop-after::after {
+    content: ''; position: absolute; top: 4px; bottom: 4px; width: 2px;
+    background: rgb(99 102 241); border-radius: 1px; pointer-events: none;
+  }
+  .tab.drop-before::before { left: -2px; }
+  .tab.drop-after::after { right: -2px; }
+  .tab-label.editing {
+    background: white; outline: 2px solid rgb(99 102 241); border-radius: 4px;
+    padding: 1px 4px; min-width: 60px; cursor: text;
+    overflow: visible; text-overflow: clip; max-width: none;
+  }
+  .tab .tab-label {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1 1 auto; min-width: 0;
+  }
+  .tab .tab-close,
+  .tab .tab-share {
+    width: 16px; height: 16px; border-radius: 4px; display: inline-flex;
+    align-items: center; justify-content: center; color: rgb(148 163 184);
+    flex-shrink: 0; transition: all 150ms ease;
+  }
+  .tab .tab-close:hover { background: rgb(226 232 240); color: rgb(15 23 42); }
+  .tab.active .tab-close:hover { background: rgb(241 245 249); }
+  .tab .tab-share { color: rgb(148 163 184); }
+  .tab .tab-share.disabled { opacity: 0.4; cursor: not-allowed; }
+  .tab .tab-share:not(.disabled):hover { background: rgb(220 252 231); color: rgb(5 150 105); }
+  .new-tab-btn {
+    padding: 6px 10px; border-radius: 8px; color: rgb(100 116 139);
+    transition: all 150ms ease; font-size: 18px; line-height: 1;
+    margin-left: 6px; align-self: center;
+  }
+  .new-tab-btn:hover { background: rgb(241 245 249); color: rgb(15 23 42); }
+
+  .input-ring { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); animation: pulseRing 2.4s ease-in-out infinite; }
+  @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.35); } 70% { box-shadow: 0 0 0 18px rgba(99,102,241,0); } 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); } }
+
+  .fade-in { animation: fadeIn 0.4s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .scroll-area::-webkit-scrollbar { width: 8px; }
+  .scroll-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+  .tabs-scroll { scrollbar-width: none; }
+  .tabs-scroll::-webkit-scrollbar { display: none; }
+
+  /* Mobile: tighter tabs, no per-tab star (Chrome-mobile-ish) */
+  @media (max-width: 767px) {
+    .tab {
+      min-width: 56px;
+      max-width: 140px;
+      padding: 7px 10px;
+      gap: 6px;
+      font-size: 12.5px;
+    }
+    .tab .tab-share { display: none; }
+    .new-tab-btn { margin-left: 2px; padding: 6px 8px; }
+  }
+
+  /* Favorites view intro animations (stagger when entering) */
+  @keyframes mp-enter-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .mp-enter > * { opacity: 0; animation: mp-enter-up 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) forwards; }
+  .mp-enter > *:nth-child(1) { animation-delay: 0.00s; }
+  .mp-enter > *:nth-child(2) { animation-delay: 0.10s; }
+  .mp-enter > *:nth-child(3) { animation-delay: 0.18s; }
+  .mp-enter > *:nth-child(4) { animation-delay: 0.26s; }
+  .mp-enter > *:nth-child(5) { animation-delay: 0.34s; }
+
+  .mp-card-enter { opacity: 0; animation: mp-enter-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards; }
+</style>
+</head>
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
+
+<!-- ── Top bar: TABS on left · LOGO on right ─────────────────── -->
+<header class="relative z-20 border-b border-slate-200 bg-slate-50">
+  <div class="max-w-[1600px] mx-auto px-2 md:px-4 pt-2 flex items-end gap-2 md:gap-3">
+    <!-- Tabs (left) -->
+    <div id="tabs-row" class="flex-1 min-w-0 flex items-end tabs-scroll overflow-x-auto pt-2 min-h-[42px]">
+      <!-- tabs injected here by JS -->
+      <button id="new-tab" class="new-tab-btn" title="New view">+</button>
+    </div>
+
+    <!-- Logo + history + settings (right) -->
+    <div class="flex items-center gap-1.5 md:gap-2 pb-2 pl-2 md:pl-4 md:border-l md:border-slate-200 relative shrink-0">
+      <button id="settings-btn" title="LLM provider &amp; API key"
+              class="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all flex items-center justify-center text-slate-600 relative">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span id="settings-dot" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500"></span>
+      </button>
+      <button id="favorites-btn" title="Favorites"
+              class="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all flex items-center justify-center text-slate-600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2l2.9 6.6 7.1.6-5.4 4.8 1.7 7-6.3-3.8L5.7 21l1.7-7L2 9.2l7.1-.6L12 2z"/>
+        </svg>
+      </button>
+      <button id="history-btn" title="Recently closed tabs"
+              class="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all flex items-center justify-center text-slate-600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>
+        </svg>
+      </button>
+      <div class="hidden md:block text-right">
+        <h1 class="text-base font-semibold text-slate-900 leading-tight">Agentic Browser</h1>
+        <p class="text-[11px] text-slate-500 -mt-0.5">Generative UI · Open Web</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ── Hero (empty / no-tabs state) ───────────────────────────── -->
+<section id="hero" class="relative flex-1 min-h-0 mesh-bg overflow-hidden flex items-center justify-center pb-32">
+  <div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div>
+
+  <div class="relative z-10 text-center px-6 max-w-3xl">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 backdrop-blur border border-slate-200 text-xs font-medium text-slate-600 mb-6 shadow-sm">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      Live · Agents scraping the open web
+    </div>
+    <h2 class="text-5xl md:text-6xl font-bold tracking-tight leading-[1.05] mb-5">
+      <span class="text-slate-900">Agents read the web.</span><br>
+      <span class="gradient-text">You read the story.</span>
+    </h2>
+    <p class="text-lg text-slate-600 mb-10 max-w-xl mx-auto">
+      Type a question. Six sub-agents fan out across the open web in parallel, read what matters, and write you one editorial feature — sources included.
+    </p>
+    <button id="needs-key-chip" class="hidden mx-auto mb-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium hover:bg-amber-100 transition" onclick="openSettings(true)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      Add an LLM key to unlock generative views
+    </button>
+    <div class="flex flex-wrap justify-center gap-3">
+      <button class="suggest chip px-4 py-2.5 rounded-full bg-white/80 border border-slate-200 text-sm text-slate-700 font-medium" data-q="compare the latest iPhone and Pixel — specs, price, release date">
+        <span class="text-indigo-500 mr-1.5">●</span> iPhone vs Pixel — specs &amp; price
+      </button>
+      <button class="suggest chip px-4 py-2.5 rounded-full bg-white/80 border border-slate-200 text-sm text-slate-700 font-medium" data-q="top AI news this week with sources">
+        <span class="text-rose-500 mr-1.5">●</span> AI news this week
+      </button>
+      <button class="suggest chip px-4 py-2.5 rounded-full bg-white/80 border border-slate-200 text-sm text-slate-700 font-medium" data-q="weekend trip ideas from Tel Aviv under 4 hours flight">
+        <span class="text-amber-500 mr-1.5">●</span> Weekend trips from TLV
+      </button>
+      <button class="suggest chip px-4 py-2.5 rounded-full bg-white/80 border border-slate-200 text-sm text-slate-700 font-medium" data-q="best 27-inch 4k monitors under $600 — reviews and prices">
+        <span class="text-emerald-500 mr-1.5">●</span> Best 27" 4K monitors &lt; $600
+      </button>
+      <button class="suggest chip px-4 py-2.5 rounded-full bg-white/80 border border-slate-200 text-sm text-slate-700 font-medium" data-q="https://news.ycombinator.com">
+        <span class="text-slate-500 mr-1.5">→</span> Or just type a URL: news.ycombinator.com
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ── Rendered view ──────────────────────────────────────────── -->
+<section id="view-shell" class="hidden flex-1 min-h-0 overflow-y-auto scroll-area relative">
+  <div class="max-w-[1600px] mx-auto px-6 py-6 pb-40">
+    <div id="view" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 min-h-[400px]"></div>
+  </div>
+</section>
+
+<!-- ── URL tab shell (real <webview>) ─────────────────────────── -->
+<section id="url-shell" class="hidden flex-1 min-h-0 flex flex-col bg-white">
+  <div class="border-b border-slate-200 px-3 py-1.5 flex items-center gap-2 text-[12px] text-slate-500">
+    <span id="url-current" class="truncate flex-1"></span>
+    <button id="url-open-external" class="px-2 py-0.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900" title="Open in system browser">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7M21 3l-9 9M5 5h6v2H5v12h12v-6h2v8H3V5z"/></svg>
+    </button>
+  </div>
+  <div id="url-container" class="flex-1 relative"></div>
+</section>
+
+<!-- ── Live scrapers overlay (per-tab, contained to view area) ──── -->
+<!-- Moved inside #view-shell at runtime so it overlays only the tab's content, not the tab strip / header / input. -->
+<template id="scrapers-overlay-template">
+<div class="scrapers-overlay absolute inset-0 z-20 flex flex-col items-center justify-start pt-8 bg-slate-50/95 backdrop-blur-sm overflow-y-auto pb-32">
+  <div class="max-w-5xl w-full px-8">
+    <div class="text-center mb-6 relative">
+      <div class="scrapers-phase text-base font-semibold text-slate-900">Planning sub-agents…</div>
+      <div class="text-xs text-slate-500 mt-1 flex items-center justify-center gap-3">
+        <span class="scrapers-elapsed font-mono tabular-nums">0:00</span>
+        <span class="scrapers-done-counter hidden">·  <span class="scrapers-done">0</span> of <span class="scrapers-total">0</span> sources<span class="scrapers-done-label"> done</span></span>
+        <span class="text-slate-300">·</span>
+        <span>Watch the agents work in parallel</span>
+      </div>
+      <button class="scrapers-cancel absolute top-0 right-0 px-3 py-1 text-xs rounded-md bg-white border border-slate-200 text-slate-600 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition">Cancel</button>
+    </div>
+    <div class="scrapers-dots mt-20 flex items-center justify-center gap-2">
+      <span class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0ms;"></span>
+      <span class="w-2.5 h-2.5 bg-violet-500 rounded-full animate-bounce" style="animation-delay: 150ms;"></span>
+      <span class="w-2.5 h-2.5 bg-fuchsia-500 rounded-full animate-bounce" style="animation-delay: 300ms;"></span>
+    </div>
+    <div class="scrapers-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  </div>
+</div>
+</template>
+
+<!-- ── Settings modal ────────────────────────────────────────── -->
+<div id="settings-backdrop" class="hidden fixed inset-0 bg-slate-900/45 backdrop-blur-sm opacity-0 transition-opacity duration-200" style="z-index: 55;" onclick="closeSettings()"></div>
+<div id="settings-modal" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[640px] max-w-[94vw] max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-200 opacity-0 scale-95 transition-all duration-200 flex flex-col overflow-hidden" style="z-index: 70;">
+  <div class="px-6 pt-5 pb-0 border-b border-slate-100">
+    <div class="flex items-start justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
+        <div>
+          <h3 class="text-base font-semibold text-slate-900">Settings</h3>
+          <p class="text-xs text-slate-500 mt-0.5">Provider, key, and your local storage.</p>
+        </div>
+      </div>
+      <button onclick="closeSettings()" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900 transition">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l12 12M13 1L1 13" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="flex gap-1 -mb-px">
+      <button class="settings-tab settings-tab-active px-3 py-2 text-sm font-medium text-slate-900 border-b-2 border-slate-900" data-pane="llm">LLM</button>
+      <button class="settings-tab px-3 py-2 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-900" data-pane="data">Data &amp; Storage</button>
+    </div>
+  </div>
+  <!-- LLM pane -->
+  <div id="settings-pane-llm" class="settings-pane px-6 py-5 space-y-4 overflow-y-auto">
+    <div>
+      <label class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">Provider</label>
+      <select id="settings-provider" class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" onchange="updateSettingsModelHints()">
+        <option value="openai">OpenAI (GPT)</option>
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="google">Google (Gemini)</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">API key</label>
+      <input id="settings-key" type="password" placeholder="sk-…  /  claude-…  /  AIza…" autocomplete="off"
+             class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+      <p id="settings-hint" class="text-[11px] text-slate-400 mt-1.5"></p>
+    </div>
+    <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+      <div>
+        <label class="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Per-agent timeout (sec)</label>
+        <input id="settings-timeout" type="number" min="30" max="300" step="10" placeholder="120"
+               class="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+        <p class="text-[10px] text-slate-400 mt-1">30–300s. Higher = more thorough.</p>
+      </div>
+      <div>
+        <label class="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Concurrent agents</label>
+        <input id="settings-concurrency" type="number" min="1" max="10" step="1" placeholder="6"
+               class="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+        <p class="text-[10px] text-slate-400 mt-1">1–10. Higher = faster but more RAM.</p>
+      </div>
+    </div>
+    <details class="group">
+      <summary class="cursor-pointer text-[12px] text-slate-500 hover:text-slate-700 select-none">Advanced — model overrides</summary>
+      <div class="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Orchestrator model</label>
+          <input id="settings-orch-model" type="text" placeholder="default for provider"
+                 class="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Scraper model</label>
+          <input id="settings-scr-model" type="text" placeholder="default for provider"
+                 class="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+        </div>
+      </div>
+    </details>
+  </div><!-- /LLM pane -->
+
+  <!-- Data & Storage pane -->
+  <div id="settings-pane-data" class="settings-pane hidden px-6 py-5 space-y-5 overflow-y-auto">
+    <div class="grid grid-cols-2 gap-3" id="storage-summary">
+      <!-- filled by renderStoragePane() -->
+    </div>
+    <div>
+      <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-2">Cached views</div>
+      <div id="storage-views" class="space-y-1 max-h-[200px] overflow-y-auto pr-1">
+        <div class="text-xs text-slate-400 italic">loading…</div>
+      </div>
+    </div>
+    <div>
+      <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-2">Open tabs</div>
+      <div id="storage-tabs" class="space-y-1 max-h-[120px] overflow-y-auto pr-1">
+        <div class="text-xs text-slate-400 italic">loading…</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 pt-2">
+      <button id="storage-clear-scrape" class="px-3 py-2 rounded-lg text-xs text-slate-700 bg-slate-100 hover:bg-slate-200 transition">Clear scrape cache</button>
+      <span id="storage-scrape-count" class="text-[11px] text-slate-400"></span>
+    </div>
+    <div class="border-t border-slate-100 pt-4 space-y-3">
+      <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Backup &amp; restore</div>
+      <p class="text-xs text-slate-500">Export a single zip of every <code>.db</code> file — drop it on another machine to migrate everything (tabs, history, cached views, favorites). Keys aren't in the zip.</p>
+      <div class="flex items-center gap-2">
+        <button id="storage-export" class="px-3 py-2 rounded-lg text-sm font-medium text-white bg-slate-900 hover:bg-slate-700 transition flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export backup
+        </button>
+        <label class="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 cursor-pointer transition flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Restore…
+          <input id="storage-import" type="file" accept=".zip" class="hidden" />
+        </label>
+        <span id="storage-import-status" class="text-[11px] text-slate-500"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Centered loader overlay ───────────────────────────────── -->
+<div id="loader" class="hidden fixed inset-0 z-25 flex items-center justify-center bg-slate-50/85 backdrop-blur-sm" style="z-index: 25;">
+  <div class="text-center px-6">
+    <div class="relative inline-block mb-6">
+      <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 shadow-2xl shadow-indigo-500/40"></div>
+      <div class="absolute inset-0 w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 animate-ping opacity-30"></div>
+      <svg class="absolute inset-0 m-auto w-10 h-10 text-white animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.847-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.847.813a4.5 4.5 0 0 0-3.09 3.09Z"/>
+      </svg>
+    </div>
+    <div id="loader-title" class="text-xl font-semibold text-slate-900 mb-2">Sub-agents are scraping the web…</div>
+    <div id="loader-subtitle" class="text-sm text-slate-500">Searching, fetching, navigating, composing</div>
+    <div class="mt-6 flex items-center justify-center gap-1.5">
+      <span class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0ms;"></span>
+      <span class="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style="animation-delay: 150ms;"></span>
+      <span class="w-2 h-2 bg-fuchsia-500 rounded-full animate-bounce" style="animation-delay: 300ms;"></span>
+    </div>
+  </div>
+</div>
+
+<!-- (Removed: floating bottom-left favorites button — replaced by the
+     ⭐ Favorites button in the top bar next to History.) -->
+
+<!-- ── Favorites full-screen view ──────────────────────────── -->
+<section id="favorites-view" class="hidden fixed inset-0 z-50 overflow-y-auto scroll-area bg-slate-50">
+
+  <div class="max-w-6xl mx-auto px-8 pt-6 pb-20 relative" id="mp-content">
+
+    <!-- Close button — aligned to content right edge, not viewport edge -->
+    <button id="mp-close" class="absolute top-6 right-8 z-20 w-10 h-10 rounded-xl bg-white/80 backdrop-blur-md hover:bg-white shadow-md border border-slate-200/80 flex items-center justify-center text-slate-600 hover:text-slate-900 transition" title="Close (Esc)">
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l16 16M17 1L1 17" stroke-linecap="round"/></svg>
+    </button>
+
+    <!-- Hero — quiet and plain -->
+    <header class="text-center pt-10 pb-6 mb-2">
+      <p class="text-[11px] font-medium text-amber-600 uppercase tracking-[0.18em] mb-3">★ Favorites</p>
+      <h1 class="text-3xl md:text-4xl font-semibold text-slate-900 tracking-tight leading-tight">
+        Your saved views, on tap.
+      </h1>
+      <p class="text-slate-500 mt-3 max-w-md mx-auto">
+        The renders you wanted to come back to — always one click away.
+      </p>
+    </header>
+
+    <div id="mp-stagger" class="mp-enter">
+
+    <!-- Search -->
+    <div class="mb-6 relative">
+      <svg class="w-4 h-4 text-slate-400 absolute top-1/2 left-3 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg>
+      <input id="mp-search" type="text" placeholder="Search views"
+             class="w-full pl-10 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400" />
+    </div>
+
+    <!-- Grid -->
+    <div id="mp-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+
+    <!-- Empty -->
+    <div id="mp-empty" class="hidden text-center py-20">
+      <p class="text-sm font-medium text-slate-600">No views match your search</p>
+      <p class="text-xs text-slate-400 mt-1">Click the ★ on any open tab to save it here.</p>
+    </div>
+
+    </div><!-- /mp-stagger -->
+  </div>
+</section>
+
+<!-- ── Favorite preview modal (read-only) ─────────────────── -->
+<div id="preview-backdrop" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] opacity-0 transition-opacity duration-200"></div>
+<div id="preview-modal" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] w-[min(640px,92vw)] max-h-[80vh] bg-white rounded-2xl shadow-2xl border border-slate-200 opacity-0 scale-95 transition-all duration-200 flex flex-col overflow-hidden">
+  <div class="px-5 py-3 border-b border-slate-100 flex items-center gap-3 shrink-0">
+    <div id="preview-avatar" class="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0">
+      <span id="preview-initial" class="text-sm font-semibold">?</span>
+    </div>
+    <div class="flex-1 min-w-0">
+      <h3 id="preview-name" class="text-sm font-semibold text-slate-900 truncate">…</h3>
+      <p id="preview-meta" class="text-[11px] text-slate-500 truncate">…</p>
+    </div>
+    <button id="preview-close" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900 transition shrink-0">
+      <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l12 12M13 1L1 13" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div id="preview-body" class="flex-1 overflow-y-auto scroll-area bg-slate-50 p-4">
+    <div class="relative">
+      <div id="preview-view" class="bg-white rounded-lg border border-slate-200 p-4 min-h-[200px] text-[12px]"
+           style="zoom: 0.78; pointer-events: none; user-select: none;"></div>
+      <!-- Read-only overlay: blocks clicks, light gray tint signals "preview only" -->
+      <div class="absolute inset-0 rounded-lg cursor-not-allowed"
+           style="background: rgba(148, 163, 184, 0.08);"></div>
+      <div class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-white/90 backdrop-blur text-[10px] font-medium text-slate-600 border border-slate-200 shadow-sm pointer-events-none">
+        Preview only
+      </div>
+    </div>
+  </div>
+  <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
+    <button id="preview-cancel" class="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100 transition">Close</button>
+    <button id="preview-install" class="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-white text-sm font-medium transition flex items-center gap-1.5">
+      Open
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ── Publish modal (centered dialog) ───────────────────────── -->
+<div id="publish-backdrop" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 opacity-0 transition-opacity duration-200"></div>
+<div id="publish-modal" class="hidden fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[480px] max-w-[94vw] bg-white rounded-2xl shadow-2xl border border-slate-200 opacity-0 scale-95 transition-all duration-200">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-start justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-rose-400 flex items-center justify-center text-white shrink-0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.8 1.7 7-6.3-3.8L5.7 21l1.7-7L2 9.2l7.1-.6L12 2z"/></svg>
+      </div>
+      <div>
+        <h3 class="text-base font-semibold text-slate-900">Save to favorites</h3>
+        <p class="text-xs text-slate-500 mt-0.5" id="publish-intent">…</p>
+      </div>
+    </div>
+    <button id="publish-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900 transition">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l12 12M13 1L1 13" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="px-6 py-5 space-y-3">
+    <div>
+      <label class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">Name</label>
+      <input id="publish-name" type="text" placeholder="Give your view a clear name"
+             class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+    </div>
+    <div>
+      <label class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1.5">Description <span class="text-slate-400 normal-case">(optional)</span></label>
+      <textarea id="publish-desc" rows="2" placeholder="What does this view show? Who is it for?"
+                class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+    </div>
+  </div>
+  <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+    <button id="publish-cancel" class="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100 transition">Cancel</button>
+    <button id="publish-btn" class="px-4 py-2 rounded-lg bg-gradient-to-br from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white text-sm font-medium shadow-md shadow-amber-500/20 transition">
+      Add to favorites
+    </button>
+  </div>
+</div>
+
+<!-- ── History side drawer ───────────────────────────────────── -->
+<div id="history-backdrop" class="hidden fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-40 opacity-0 transition-opacity duration-200"></div>
+<aside id="history-drawer" class="fixed top-0 right-0 h-screen w-[380px] max-w-[90vw] bg-white border-l border-slate-200 shadow-2xl z-50 translate-x-full transition-transform duration-300 ease-out flex flex-col">
+  <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+    <div>
+      <h2 class="text-base font-semibold text-slate-900">Recently closed</h2>
+      <p class="text-[11px] text-slate-500 -mt-0.5">Reopen a tab from your history</p>
+    </div>
+    <button id="history-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900 transition" title="Close">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l12 12M13 1L1 13" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div id="history-list" class="flex-1 overflow-y-auto py-2"></div>
+  <div id="history-empty" class="flex-1 flex items-center justify-center px-6 text-center">
+    <div>
+      <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>
+        </svg>
+      </div>
+      <p class="text-sm text-slate-500">No closed tabs yet</p>
+      <p class="text-[11px] text-slate-400 mt-1">Close a tab and it'll show up here.</p>
+    </div>
+  </div>
+  <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between">
+    <span class="text-[11px] text-slate-400" id="history-count"></span>
+    <button id="history-clear" class="text-[11px] text-slate-400 hover:text-rose-600 transition">Clear all</button>
+  </div>
+</aside>
+
+<!-- ── Floating status pill ──────────────────────────────────── -->
+<div id="status" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-white border border-slate-200 rounded-full shadow-lg text-sm text-slate-700 flex items-center gap-2">
+  <span id="status-icon" class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+  <span id="status-text">Updated</span>
+</div>
+
+<!-- ── Bottom input bar ──────────────────────────────────────── -->
+<div class="fixed bottom-0 left-0 right-0 z-30 pb-6 pt-4 px-6 pointer-events-none">
+  <div class="max-w-3xl mx-auto pointer-events-auto">
+    <div id="input-card" class="bg-white/30 backdrop-blur-xl border border-white/50 rounded-2xl shadow-lg shadow-slate-400/10 input-ring transition-all">
+      <div class="flex items-center gap-2 p-2">
+        <div class="flex-1 flex items-center gap-2 px-3">
+          <svg class="w-5 h-5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.847-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.847.813a4.5 4.5 0 0 0-3.09 3.09Z"/>
+          </svg>
+          <input id="prompt" type="text" autofocus
+                 placeholder="Enter a URL or ask anything — e.g. 'compare RTX 5080 vs RX 9070'"
+                 class="flex-1 py-3 text-[15px] bg-transparent focus:outline-none placeholder:text-slate-400" />
+          <button id="force-btn" title="Regenerate (bypass cache)" class="hidden text-slate-400 hover:text-slate-700 px-2 py-1 text-base">↻</button>
+        </div>
+        <button id="submit-btn" class="bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-5 py-3 rounded-xl text-sm font-medium shadow-md shadow-indigo-500/30 transition flex items-center gap-2">
+          <span id="submit-label">Render</span>
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="text-[11px] text-slate-400 text-center mt-2 flex items-center justify-center gap-3">
+      <span>Press Enter to render · Sub-agents · GPT-5.1 + GPT-4o-mini · Live web</span>
+      <span id="queue-badge" class="hidden inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+        <span id="queue-count">0</span> queued
+      </span>
+    </div>
+  </div>
+</div>
+
+<script>
+// Backend lives on localhost (Electron) or same-origin (web app fallback).
+const API = (typeof window !== 'undefined' && window.electronAPI) ? 'http://127.0.0.1:8003' : '';
+const $ = (id) => document.getElementById(id);
+const STORAGE_KEY = 'agentic-browser-tabs-v1';
+const SETTINGS_LS_KEY = 'agentic-browser-settings-v1';  // fallback when not in Electron
+const MAX_HISTORY = 20;
+const IS_ELECTRON = !!(typeof window !== 'undefined' && window.electronAPI);
+
+// Typewriter examples — open-web questions across a few flavors. Mix in real URLs
+// to teach the dual-purpose input.
+const EXAMPLES = [
+  "compare RTX 5080 vs RX 9070 — specs and price",
+  "https://news.ycombinator.com",
+  "top AI news this week with sources",
+  "best 27-inch 4k monitors under $600",
+  "weekend trip ideas from Tel Aviv under 4 hours flight",
+  "github.com/anthropic-ai/anthropic-sdk-python",
+  "is the new MacBook M5 worth it over the M4",
+  "current weather and forecast in Lisbon",
+  "Bitcoin and ETH prices today with 7-day change",
+  "what changed in TypeScript 5.7",
+  "compare Tesla Model 3 and Polestar 2 — range, price, charging",
+  "summary of the latest Apple keynote",
+  "best espresso machines under $1000 — reviews",
+  "what to do in Kyoto in autumn — 5 day itinerary",
+  "Premier League standings and top scorers this season",
+  "compare Notion, Obsidian and Logseq for note-taking",
+];
+
+let tabs = [];                    // [{ intent }]
+let closedTabs = [];              // [{ intent, closedAt }] — most-recent first
+let activeIntent = null;
+let cachedIntents = new Set();    // server-confirmed cache entries
+const queue = [];                 // pending tasks: { kind:'render'|'edit', intent, instruction, force }
+let queueRunning = false;
+
+// ── Persistence (server-side SQLite via /api/tabs) ──────────
+// EVERYTHING tab-related is persisted server-side now: open tabs, active
+// intent, AND closed-tabs history. Survives page reload, Electron restart,
+// server restart, OS reboot, even a fresh install (just copy data/*.db).
+
+let _saveTabsTimer = null;
+function saveTabs() {
+  // Debounce server writes — drag/rename/click can fire many in a row.
+  if (_saveTabsTimer) clearTimeout(_saveTabsTimer);
+  _saveTabsTimer = setTimeout(_pushTabsToServer, 250);
+}
+
+async function _pushTabsToServer() {
+  _saveTabsTimer = null;
+  try {
+    // Strip in-memory-only fields before sending.
+    const payload = {
+      tabs: tabs.map(t => ({
+        intent: t.intent,
+        label: t.label || null,
+        kind: t.kind || 'intent',
+        url: t.url || null,
+      })),
+      active_intent: activeIntent || null,
+    };
+    await fetch(`${API}/api/tabs`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    console.warn('saveTabs failed:', e.message);
+  }
+}
+
+async function loadTabs() {
+  // 1. Open tabs.
+  try {
+    const res = await fetch(`${API}/api/tabs`);
+    if (res.ok) {
+      const data = await res.json();
+      tabs = Array.isArray(data.tabs) ? data.tabs : [];
+      activeIntent = data.active_intent || null;
+    }
+  } catch (e) {
+    console.warn('loadTabs from server failed:', e.message);
+  }
+  // 2. Closed history.
+  try {
+    const res = await fetch(`${API}/api/tabs/closed`);
+    if (res.ok) {
+      const data = await res.json();
+      closedTabs = (data.items || []).map(c => ({ intent: c.intent, closedAt: c.closed_at }));
+    } else { closedTabs = []; }
+  } catch (e) { closedTabs = []; }
+
+  // 3. One-time migration from the OLD localStorage layout (if it still exists).
+  if (tabs.length === 0) {
+    try {
+      const legacy = localStorage.getItem(STORAGE_KEY);
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        const oldTabs = Array.isArray(parsed.tabs) ? parsed.tabs : [];
+        if (oldTabs.length > 0) {
+          tabs = oldTabs;
+          activeIntent = parsed.active || null;
+          // Migrate closed too.
+          const oldClosed = Array.isArray(parsed.closed) ? parsed.closed : [];
+          for (const c of oldClosed) {
+            try {
+              await fetch(`${API}/api/tabs/closed`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ intent: c.intent, closed_at: c.closedAt || Date.now() }),
+              });
+            } catch {}
+          }
+          await _pushTabsToServer();
+          localStorage.removeItem(STORAGE_KEY);
+          console.log('Migrated', tabs.length, 'tabs from localStorage to /api/tabs');
+          // Re-pull closed to get the canonical server view.
+          try {
+            const res = await fetch(`${API}/api/tabs/closed`);
+            if (res.ok) {
+              const data = await res.json();
+              closedTabs = (data.items || []).map(c => ({ intent: c.intent, closedAt: c.closed_at }));
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+}
+
+// ── Tabs rendering ──────────────────────────────────────────
+function renderTabs() {
+  const row = $('tabs-row');
+  Array.from(row.querySelectorAll('.tab')).forEach(el => el.remove());
+  tabs.forEach((tab) => {
+    const el = document.createElement('div');
+    el.className = 'tab' + (tab.intent === activeIntent ? ' active' : '');
+    el.draggable = true;
+    el.dataset.intent = tab.intent;
+    const cached = cachedIntents.has(tab.intent);
+    const rendering = tabRenderState.get(tab.intent)?.isInflight?.();
+    const readyInBg = !!tab._readyHtml;
+    const display = tab.label || tab.intent;
+    el.title = (tab.label ? `${tab.label} (intent: ${tab.intent})` : tab.intent)
+      + (rendering ? ' · rendering…' : readyInBg ? ' · ready (click to view)' : cached ? ' · cached' : ' · not yet generated')
+      + ' — drag to reorder · double-click to rename';
+    const isReal = !isPlaceholder(tab.intent);
+    const shareBtn = isReal ? `
+      <span class="tab-share ${cached ? '' : 'disabled'}" data-action="share"
+            title="${cached ? 'Add to favorites' : 'Render this view before saving'}">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.8 1.7 7-6.3-3.8L5.7 21l1.7-7L2 9.2l7.1-.6L12 2z"/></svg>
+      </span>` : '';
+    const dotColor = rendering ? 'bg-indigo-500 animate-pulse'
+                     : readyInBg ? 'bg-emerald-500 animate-pulse'
+                     : cached ? 'bg-emerald-500'
+                     : 'bg-slate-300';
+    el.innerHTML = `
+      <span class="w-1.5 h-1.5 rounded-full ${dotColor}"></span>
+      <span class="tab-label" data-action="label">${escapeHtml(display)}</span>
+      ${shareBtn}
+      <span class="tab-close" data-action="close">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 1l8 8M9 1l-8 8" stroke-linecap="round"/></svg>
+      </span>
+    `;
+
+    // Click → switch / close / share (rename has its own handler)
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.tab-label.editing')) return;        // mid-rename: don't switch
+      if (e.target.closest('[data-action="close"]')) closeTab(tab.intent);
+      else if (e.target.closest('[data-action="share"]')) {
+        if (cachedIntents.has(tab.intent)) shareTab(tab.intent);
+        else {
+          setStatus('Render this view first before sharing', true, 'amber');
+          setTimeout(() => setStatus('', false), 2200);
+        }
+      }
+      else switchTo(tab.intent);
+    });
+
+    // Double-click label → inline rename
+    const labelEl = el.querySelector('[data-action="label"]');
+    labelEl.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startRename(tab.intent, labelEl);
+    });
+
+    // Drag handlers — reorder tabs
+    el.addEventListener('dragstart', (e) => {
+      if (labelEl.classList.contains('editing')) { e.preventDefault(); return; }
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tab.intent);
+      el.classList.add('dragging');
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      row.querySelectorAll('.tab').forEach(t => t.classList.remove('drop-before', 'drop-after'));
+    });
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = el.getBoundingClientRect();
+      const before = (e.clientX - rect.left) < rect.width / 2;
+      el.classList.toggle('drop-before', before);
+      el.classList.toggle('drop-after', !before);
+    });
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drop-before', 'drop-after');
+    });
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const draggedIntent = e.dataTransfer.getData('text/plain');
+      el.classList.remove('drop-before', 'drop-after');
+      if (!draggedIntent || draggedIntent === tab.intent) return;
+      const rect = el.getBoundingClientRect();
+      const before = (e.clientX - rect.left) < rect.width / 2;
+      reorderTabs(draggedIntent, tab.intent, before);
+    });
+
+    row.insertBefore(el, $('new-tab'));
+  });
+}
+
+function reorderTabs(draggedIntent, targetIntent, before) {
+  const dragged = tabs.find(t => t.intent === draggedIntent);
+  if (!dragged) return;
+  tabs = tabs.filter(t => t.intent !== draggedIntent);
+  const targetIdx = tabs.findIndex(t => t.intent === targetIntent);
+  if (targetIdx < 0) return;
+  tabs.splice(before ? targetIdx : targetIdx + 1, 0, dragged);
+  renderTabs(); saveTabs();
+}
+
+function startRename(intent, el) {
+  const tab = tabs.find(t => t.intent === intent);
+  if (!tab) return;
+  el.contentEditable = 'true';
+  el.classList.add('editing');
+  el.focus();
+  // Select all text
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  const finish = (save) => {
+    el.contentEditable = 'false';
+    el.classList.remove('editing');
+    if (save) {
+      const newLabel = el.textContent.trim();
+      if (newLabel && newLabel !== tab.intent) tab.label = newLabel;
+      else delete tab.label;                               // reset to intent
+      saveTabs();
+    }
+    renderTabs();
+  };
+
+  el.addEventListener('blur', () => finish(true), { once: true });
+  el.addEventListener('keydown', function onKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); el.removeEventListener('keydown', onKey); finish(false); }
+  });
+}
+
+async function refreshCacheState() {
+  try {
+    const res = await fetch(`${API}/api/cache`);
+    if (!res.ok) return;
+    const data = await res.json();
+    cachedIntents = new Set((data.items || []).map(i => i.intent));
+    renderTabs();
+  } catch {}
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── Placeholder ("New Tab") helpers ─────────────────────────
+function isPlaceholder(intent) {
+  return intent && /^New Tab( \d+)?$/.test(intent);
+}
+function uniqueNewTabName() {
+  let n = 1;
+  while (tabs.find(t => t.intent === (n === 1 ? 'New Tab' : `New Tab ${n}`))) n++;
+  return n === 1 ? 'New Tab' : `New Tab ${n}`;
+}
+
+// ── Mode (hero / view / favorites) ────────────────────────
+let currentMode = 'hero';
+function setMode(mode) {
+  currentMode = mode;
+  $('hero').classList.toggle('hidden', mode !== 'hero');
+  $('view-shell').classList.toggle('hidden', mode !== 'view');
+  $('favorites-view').classList.toggle('hidden', mode !== 'favorites');
+  if (mode === 'hero') {
+    $('submit-label').textContent = 'Render';
+    $('force-btn').classList.add('hidden');
+    $('input-card').classList.add('input-ring');
+    startTyping();
+  } else if (mode === 'view') {
+    $('prompt').placeholder = "Refine this view… e.g. 'group by owner and add a severity chart'";
+    $('submit-label').textContent = 'Refine';
+    $('force-btn').classList.remove('hidden');
+    $('input-card').classList.remove('input-ring');
+    stopTyping();
+  } else { // favorites — overlays the whole screen
+    stopTyping();
+  }
+}
+
+function closeFavorites() {
+  // Return to whatever the user had open before opening favorites.
+  if (activeIntent && tabs.find(t => t.intent === activeIntent)) {
+    if (isPlaceholder(activeIntent)) setMode('hero');
+    else setMode('view');
+  } else {
+    setMode('hero');
+  }
+}
+
+// ── Typewriter placeholder (render/hero mode only) ──────────
+const TYPE_PREFIX = "Enter a URL or ask anything — e.g. ";
+let typeTimer = null;
+let lastExample = null;
+
+function setPh(text) { $('prompt').placeholder = text; }
+function shouldStop() { return currentMode !== 'hero' || $('prompt').value; }
+
+function stopTyping() {
+  if (typeTimer) { clearTimeout(typeTimer); typeTimer = null; }
+}
+
+function startTyping() {
+  stopTyping();
+  if (currentMode !== 'hero' || $('prompt').value) return;
+  typeExample();
+}
+
+function pickExample() {
+  if (EXAMPLES.length === 1) return EXAMPLES[0];
+  let example;
+  do { example = EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)]; }
+  while (example === lastExample);                    // never repeat back-to-back
+  lastExample = example;
+  return example;
+}
+
+function typeExample() {
+  if (shouldStop()) return;
+  // The quotes are typed as part of the animation, not pre-rendered.
+  const fullText = '“' + pickExample() + '”';
+  let i = 0;
+
+  const typeChar = () => {
+    if (shouldStop()) return;
+    if (i < fullText.length) {
+      i++;
+      setPh(TYPE_PREFIX + fullText.slice(0, i));
+      typeTimer = setTimeout(typeChar, 24 + Math.random() * 28);
+    } else {
+      holdAtEnd();
+    }
+  };
+
+  const holdAtEnd = () => {
+    if (shouldStop()) return;
+    typeTimer = setTimeout(deleteChars, 2200);
+  };
+
+  const deleteChars = () => {
+    if (shouldStop()) return;
+    if (i > 0) {
+      i--;
+      setPh(TYPE_PREFIX + fullText.slice(0, i));
+      typeTimer = setTimeout(deleteChars, 14);
+    } else {
+      typeTimer = setTimeout(typeExample, 280);       // pick another random
+    }
+  };
+
+  typeChar();
+}
+
+// ── Status / loader UI ──────────────────────────────────────
+function setStatus(text, show, color = 'emerald') {
+  $('status-text').textContent = text;
+  $('status-icon').className = `w-2 h-2 bg-${color}-500 rounded-full`;
+  $('status').classList.toggle('hidden', !show);
+}
+function showLoader(show, title = 'Sub-agents are scraping the web…', subtitle = 'Searching, fetching, navigating, composing') {
+  $('loader-title').textContent = title;
+  $('loader-subtitle').textContent = subtitle;
+  $('loader').classList.toggle('hidden', !show);
+}
+
+// ── HTML rendering with sequential <script> loading ─────────
+async function renderHtml(html) {
+  const view = $('view');
+  view.innerHTML = html;
+  view.classList.remove('fade-in'); void view.offsetWidth; view.classList.add('fade-in');
+  const scripts = Array.from(view.querySelectorAll('script'));
+  for (const old of scripts) {
+    const s = document.createElement('script');
+    for (const attr of old.attributes) s.setAttribute(attr.name, attr.value);
+    if (old.src) {
+      await new Promise(resolve => {
+        s.onload = resolve;
+        s.onerror = (e) => { console.error('Script load failed:', s.src, e); resolve(); };
+        old.replaceWith(s);
+      });
+    } else {
+      s.textContent = old.textContent; old.replaceWith(s);
+    }
+  }
+}
+
+// ── Tab actions ─────────────────────────────────────────────
+function addTab(intent) {
+  if (!tabs.find(t => t.intent === intent)) tabs.push({ intent });
+}
+function closeTab(intent) {
+  const idx = tabs.findIndex(t => t.intent === intent);
+  if (idx < 0) return;
+  // If this tab is rendering, cancel its render so the WS + fetch don't leak.
+  if (tabRenderState.has(intent)) cancelRender(intent);
+  tabRenderState.delete(intent);
+  // Archive in history (only real intents, never placeholders).
+  if (!isPlaceholder(intent)) {
+    const ts = Date.now();
+    closedTabs = closedTabs.filter(c => c.intent !== intent);
+    closedTabs.unshift({ intent, closedAt: ts });
+    if (closedTabs.length > MAX_HISTORY) closedTabs.length = MAX_HISTORY;
+    // Persist server-side.
+    fetch(`${API}/api/tabs/closed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intent, closed_at: ts }),
+    }).catch(() => {});
+  }
+  tabs.splice(idx, 1);
+  // Always keep at least one tab open (a tab is a session connection).
+  if (tabs.length === 0) {
+    newTab();
+    return;
+  }
+  if (activeIntent === intent) {
+    activeIntent = tabs[Math.max(0, idx - 1)].intent;
+    switchTo(activeIntent);
+  }
+  renderTabs(); saveTabs();
+}
+
+// ── History (closed tabs) ───────────────────────────────────
+function renderHistory() {
+  const list = $('history-list');
+  const empty = $('history-empty');
+  list.innerHTML = '';
+  $('history-count').textContent = closedTabs.length ? `${closedTabs.length} item${closedTabs.length === 1 ? '' : 's'}` : '';
+  if (closedTabs.length === 0) {
+    list.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.classList.add('flex');
+    return;
+  }
+  empty.classList.add('hidden');
+  empty.classList.remove('flex');
+  list.classList.remove('hidden');
+  closedTabs.forEach(({ intent, closedAt }) => {
+    const item = document.createElement('div');
+    item.className = 'group flex items-center gap-3 px-4 py-3 mx-2 rounded-lg hover:bg-slate-50 cursor-pointer transition';
+    const cached = cachedIntents.has(intent);
+    item.innerHTML = `
+      <span class="w-2 h-2 rounded-full ${cached ? 'bg-emerald-500' : 'bg-slate-300'} shrink-0"></span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm text-slate-900 truncate">${escapeHtml(intent)}</div>
+        <div class="text-[11px] text-slate-400">${formatAgo(closedAt)}${cached ? ' · cached' : ' · uncached'}</div>
+      </div>
+      <button class="opacity-0 group-hover:opacity-100 w-6 h-6 rounded hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-600 transition" data-action="forget" title="Forget permanently">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 1l10 10M11 1L1 11" stroke-linecap="round"/></svg>
+      </button>
+    `;
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('[data-action="forget"]')) {
+        forgetClosed(intent);
+      } else {
+        restoreClosed(intent);
+      }
+    });
+    list.appendChild(item);
+  });
+}
+
+function formatAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+
+function formatDate(ts) {
+  return new Date(ts).toLocaleDateString(undefined, {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
+function restoreClosed(intent) {
+  closedTabs = closedTabs.filter(c => c.intent !== intent);
+  if (!tabs.find(t => t.intent === intent)) tabs.push({ intent });
+  // Server-side: drop from closed_tabs (restoring it from history).
+  fetch(`${API}/api/tabs/closed?intent=${encodeURIComponent(intent)}`, { method: 'DELETE' }).catch(() => {});
+  toggleHistory(false);
+  saveTabs();
+  switchTo(intent);
+}
+
+function forgetClosed(intent) {
+  closedTabs = closedTabs.filter(c => c.intent !== intent);
+  // Drop both the cached view AND the closed-tab record.
+  fetch(`${API}/api/cache?intent=${encodeURIComponent(intent)}`, { method: 'DELETE' })
+    .then(() => { cachedIntents.delete(intent); renderHistory(); }).catch(() => {});
+  fetch(`${API}/api/tabs/closed?intent=${encodeURIComponent(intent)}`, { method: 'DELETE' }).catch(() => {});
+  saveTabs();
+  renderHistory();
+}
+
+function toggleHistory(open) {
+  const drawer = $('history-drawer');
+  const backdrop = $('history-backdrop');
+  const isOpen = !drawer.classList.contains('translate-x-full');
+  const shouldOpen = open ?? !isOpen;
+  if (shouldOpen) {
+    renderHistory();
+    backdrop.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      backdrop.classList.remove('opacity-0');
+      backdrop.classList.add('opacity-100');
+      drawer.classList.remove('translate-x-full');
+    });
+  } else {
+    backdrop.classList.add('opacity-0');
+    backdrop.classList.remove('opacity-100');
+    drawer.classList.add('translate-x-full');
+    setTimeout(() => backdrop.classList.add('hidden'), 200);
+  }
+}
+
+// ── Favorites ───────────────────────────────────────────────
+let favoriteItems = [];
+let mpQuery = '';
+let sharingIntent = null;        // tab the user explicitly clicked share on
+const ME = 'demo';               // current user id
+
+function shareTab(intent) {
+  openPublishModal(intent);
+}
+
+function openFavorites() {
+  setMode('favorites');
+  // Replay the stagger animation on every open by re-applying the class.
+  const stagger = $('mp-stagger');
+  if (stagger) {
+    stagger.classList.remove('mp-enter');
+    void stagger.offsetWidth;
+    stagger.classList.add('mp-enter');
+  }
+  refreshFavorites();
+}
+
+async function refreshFavorites() {
+  try {
+    const res = await fetch(`${API}/api/favorites`);
+    if (!res.ok) return;
+    const data = await res.json();
+    favoriteItems = data.items || [];
+    renderFavorites();
+  } catch {}
+}
+
+const PALETTE = [
+  ['from-indigo-500', 'to-violet-500'],
+  ['from-rose-500',   'to-pink-500'],
+  ['from-emerald-500','to-teal-500'],
+  ['from-amber-500',  'to-orange-500'],
+  ['from-sky-500',    'to-cyan-500'],
+  ['from-fuchsia-500','to-purple-500'],
+];
+function hashColor(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
+
+function renderFavorites() {
+  // Search only — server returns items in recent order.
+  let items = favoriteItems.slice();
+  if (mpQuery) {
+    const q = mpQuery.toLowerCase();
+    items = items.filter(i =>
+      (i.name || '').toLowerCase().includes(q)
+      || (i.description || '').toLowerCase().includes(q)
+      || (i.intent || '').toLowerCase().includes(q)
+      || (i.author || '').toLowerCase().includes(q)
+    );
+  }
+
+  const grid = $('mp-grid');
+  const empty = $('mp-empty');
+  grid.innerHTML = '';
+
+  if (items.length === 0) {
+    grid.classList.add('hidden');
+    empty.classList.remove('hidden');
+    return;
+  }
+  grid.classList.remove('hidden');
+  empty.classList.add('hidden');
+
+  items.forEach((item, idx) => {
+    const [from, to] = hashColor(item.name);
+    const isMine = item.author === ME;
+    const card = document.createElement('div');
+    card.className = 'group rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/60 hover:-translate-y-1 transition-all duration-200 flex flex-col mp-card-enter cursor-pointer';
+    card.style.animationDelay = `${Math.min(idx, 8) * 0.04 + 0.05}s`;
+    const dateMs = new Date(item.published_at + 'Z').getTime();
+    card.innerHTML = `
+      <div class="p-5 flex-1 flex flex-col">
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 rounded-lg bg-gradient-to-br ${from} ${to} flex items-center justify-center text-white shrink-0 group-hover:scale-105 group-hover:shadow-md transition">
+            <span class="text-sm font-semibold">${escapeHtml((item.name || '?')[0].toUpperCase())}</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <div class="text-[14px] font-medium text-slate-900 truncate">${escapeHtml(item.name)}</div>
+              ${isMine ? `<span class="text-[10px] text-slate-500 px-1.5 py-0.5 rounded bg-slate-100 shrink-0">Yours</span>` : ''}
+            </div>
+            <div class="text-[11px] text-slate-500 mt-0.5 truncate" title="${formatDate(dateMs)}">
+              ${escapeHtml(item.author)} · ${formatDate(dateMs)}
+            </div>
+          </div>
+          ${isMine ? `
+            <button data-action="remove" data-id="${item.id}"
+                    class="shrink-0 w-7 h-7 rounded-md text-slate-300 hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center transition opacity-0 group-hover:opacity-100"
+                    title="Remove this view">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+              </svg>
+            </button>` : ''}
+        </div>
+        ${item.description ? `<div class="text-[13px] text-slate-600 mt-3 line-clamp-2">${escapeHtml(item.description)}</div>` : ''}
+        <div class="flex-1"></div>
+        <div class="mt-4 flex items-center justify-between">
+          <div class="text-[11px] text-slate-400 group-hover:text-slate-500 transition flex items-center gap-1">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Click to preview
+          </div>
+          <button data-action="install" data-id="${item.id}" class="px-3 py-1.5 rounded-md bg-slate-900 hover:bg-slate-700 text-white text-xs font-medium transition">
+            Open
+          </button>
+        </div>
+      </div>
+    `;
+    card.querySelector('[data-action="install"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openFavorite(item.id);
+    });
+    const removeBtn = card.querySelector('[data-action="remove"]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`Remove "${item.name}" from favorites?`)) {
+          removeFavorite(item.id);
+        }
+      });
+    }
+    // Clicking the card body (anywhere except install / remove) → preview modal
+    card.addEventListener('click', () => openPreview(item));
+    grid.appendChild(card);
+  });
+}
+
+// ── Preview modal ─────────────────────────────────────────
+async function openPreview(item) {
+  const backdrop = $('preview-backdrop');
+  const modal = $('preview-modal');
+  const view = $('preview-view');
+  const [from, to] = hashColor(item.name);
+  const dateMs = new Date(item.published_at + 'Z').getTime();
+
+  // Fill header from list item first so the modal opens instantly
+  $('preview-avatar').className = `w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 bg-gradient-to-br ${from} ${to}`;
+  $('preview-initial').textContent = (item.name || '?')[0].toUpperCase();
+  $('preview-name').textContent = item.name;
+  $('preview-meta').textContent = `${item.author} · ${formatDate(dateMs)} · "${item.intent}"`;
+  modal.dataset.id = item.id;
+
+  // Show shell with skeleton, then fetch full HTML.
+  view.innerHTML = '<div class="text-center text-slate-400 py-10 text-sm">Loading preview…</div>';
+  backdrop.classList.remove('hidden');
+  modal.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    backdrop.classList.remove('opacity-0'); backdrop.classList.add('opacity-100');
+    modal.classList.remove('opacity-0', 'scale-95'); modal.classList.add('opacity-100', 'scale-100');
+  });
+
+  try {
+    const res = await fetch(`${API}/api/favorites/${item.id}`);
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const full = await res.json();
+    // Render the HTML into the preview pane (scripts run via the same replay path).
+    view.innerHTML = full.html;
+    const scripts = Array.from(view.querySelectorAll('script'));
+    for (const old of scripts) {
+      const s = document.createElement('script');
+      for (const attr of old.attributes) s.setAttribute(attr.name, attr.value);
+      if (old.src) {
+        await new Promise(resolve => { s.onload = resolve; s.onerror = resolve; old.replaceWith(s); });
+      } else {
+        s.textContent = old.textContent; old.replaceWith(s);
+      }
+    }
+  } catch (e) {
+    view.innerHTML = `<div class="text-center text-rose-600 py-10 text-sm">Failed to load preview: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function closePreview() {
+  const backdrop = $('preview-backdrop');
+  const modal = $('preview-modal');
+  backdrop.classList.add('opacity-0'); backdrop.classList.remove('opacity-100');
+  modal.classList.add('opacity-0', 'scale-95'); modal.classList.remove('opacity-100', 'scale-100');
+  setTimeout(() => {
+    backdrop.classList.add('hidden'); modal.classList.add('hidden');
+    $('preview-view').innerHTML = '';                     // free memory + stop any chart timers
+  }, 200);
+}
+
+async function removeFavorite(id) {
+  try {
+    const res = await fetch(`${API}/api/favorites/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    setStatus('Removed from favorites', true);
+    setTimeout(() => setStatus('', false), 2000);
+    await refreshFavorites();
+  } catch (e) {
+    setStatus('Remove failed: ' + e.message, true, 'rose');
+  }
+}
+
+// ── Publish modal ──────────────────────────────────────────
+function openPublishModal(forIntent) {
+  const intent = forIntent || activeIntent;
+  if (!intent || isPlaceholder(intent)) {
+    setStatus('Render a view first before sharing', true, 'amber');
+    setTimeout(() => setStatus('', false), 2200);
+    return;
+  }
+  if (!cachedIntents.has(intent)) {
+    setStatus('Wait until the view finishes generating', true, 'amber');
+    setTimeout(() => setStatus('', false), 2200);
+    return;
+  }
+  const tab = tabs.find(t => t.intent === intent);
+  $('publish-intent').textContent = `Source: ${intent}`;
+  $('publish-name').value = (tab && tab.label) || intent;
+  $('publish-desc').value = '';
+  $('publish-modal').dataset.intent = intent;
+
+  const backdrop = $('publish-backdrop');
+  const modal = $('publish-modal');
+  backdrop.classList.remove('hidden');
+  modal.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    backdrop.classList.remove('opacity-0'); backdrop.classList.add('opacity-100');
+    modal.classList.remove('opacity-0', 'scale-95'); modal.classList.add('opacity-100', 'scale-100');
+  });
+  setTimeout(() => $('publish-name').focus(), 80);
+}
+
+function closePublishModal() {
+  const backdrop = $('publish-backdrop');
+  const modal = $('publish-modal');
+  backdrop.classList.add('opacity-0'); backdrop.classList.remove('opacity-100');
+  modal.classList.add('opacity-0', 'scale-95'); modal.classList.remove('opacity-100', 'scale-100');
+  setTimeout(() => { backdrop.classList.add('hidden'); modal.classList.add('hidden'); }, 180);
+}
+
+async function publishFromModal() {
+  const intent = $('publish-modal').dataset.intent;
+  if (!intent) return;
+  const name = $('publish-name').value.trim() || intent;
+  const description = $('publish-desc').value.trim();
+  const btn = $('publish-btn');
+  btn.disabled = true; btn.textContent = 'Publishing…';
+  try {
+    const res = await fetch(`${API}/api/favorites/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intent, name, description }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    closePublishModal();
+    setStatus('Saved to favorites ★', true);
+    setTimeout(() => setStatus('', false), 2000);
+    await refreshFavorites();
+  } catch (e) {
+    setStatus('Publish failed: ' + e.message, true, 'rose');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add to favorites';
+  }
+}
+
+async function openFavorite(viewId) {
+  try {
+    const res = await fetch(`${API}/api/favorites/install`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ view_id: viewId }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+    if (!tabs.find(t => t.intent === data.intent)) tabs.push({ intent: data.intent, label: data.name });
+    cachedIntents.add(data.intent);
+    saveTabs();
+    switchTo(data.intent);                     // also leaves favorites mode
+    setStatus('Opened ✓', true);
+    setTimeout(() => setStatus('', false), 2000);
+    refreshFavorites();
+  } catch (e) {
+    setStatus('Failed to open: ' + e.message, true, 'rose');
+  }
+}
+
+async function switchTo(intent) {
+  activeIntent = intent;
+  // Placeholder tabs have no content — switch to hero (empty) state.
+  if (isPlaceholder(intent)) {
+    setMode('hero');
+    $('view').innerHTML = '';
+    document.querySelectorAll('#view-shell .scrapers-overlay').forEach(o => o.remove());
+    renderTabs(); saveTabs();
+    $('prompt').focus();
+    return;
+  }
+  setMode('view');
+  renderTabs(); saveTabs();
+
+  // If this tab is mid-render, just remount its overlay. No new fetch.
+  const state = tabRenderState.get(intent);
+  if (state && state.isInflight()) {
+    $('view').innerHTML = '';   // clear stale content so overlay shows over a clean shell
+    mountOverlayForActiveTab();
+    return;
+  }
+
+  // If we have HTML stashed from a background render that completed, paint it.
+  const tab = tabs.find(t => t.intent === intent);
+  if (tab && tab._readyHtml) {
+    showLoader(false);
+    document.querySelectorAll('#view-shell .scrapers-overlay').forEach(o => o.remove());
+    await renderHtml(tab._readyHtml);
+    delete tab._readyHtml;
+    cachedIntents.add(intent);
+    renderTabs();
+    return;
+  }
+
+  // Otherwise: try the cache. If present, load it. If not, don't auto-render.
+  if (!cachedIntents.has(intent)) {
+    document.querySelectorAll('#view-shell .scrapers-overlay').forEach(o => o.remove());
+    $('view').innerHTML = `<div class="text-center py-20 text-slate-500">
+      <div class="text-sm font-medium text-slate-700 mb-1">No view yet for this tab</div>
+      <div class="text-xs text-slate-500 mb-4">Type an intent below to render — or press the regenerate icon.</div>
+      <button id="render-now" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium">Render now</button>
+    </div>`;
+    const btn = document.getElementById('render-now');
+    if (btn) btn.onclick = () => doRender(intent, true);
+    return;
+  }
+  // Cached path
+  showLoader(true, 'Loading view…', 'Restoring from cache');
+  try {
+    const res = await fetch(`${API}/api/render?intent=${encodeURIComponent(intent)}`, { headers: llmHeaders() });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+    showLoader(false);
+    document.querySelectorAll('#view-shell .scrapers-overlay').forEach(o => o.remove());
+    await renderHtml(data.html);
+    cachedIntents.add(intent);
+    renderTabs();
+    setStatus('Loaded from cache ⚡', true);
+    setTimeout(() => setStatus('', false), 2000);
+  } catch (e) {
+    showLoader(false);
+    setStatus('Error: ' + e.message, true, 'rose');
+  }
+}
+
+// ── New render (from intent input or suggestion) ────────────
+async function doRender(intent, force = false) {
+  // Settle activeIntent to point at the intent's tab. Three cases:
+  //   (a) a tab for this intent already exists, and it's not the active one
+  //       → jump to it, drop our placeholder if any
+  //   (b) we're sitting on a "New Tab" placeholder → rename it in place
+  //   (c) brand-new intent and we're on a non-placeholder real tab → add a tab
+  const existing = tabs.find(t => t.intent === intent);
+  if (existing && existing.intent !== activeIntent) {
+    if (isPlaceholder(activeIntent)) tabs = tabs.filter(t => t.intent !== activeIntent);
+    activeIntent = intent;
+  } else if (isPlaceholder(activeIntent)) {
+    const tab = tabs.find(t => t.intent === activeIntent);
+    if (tab) tab.intent = intent;
+    activeIntent = intent;
+  } else if (!existing) {
+    addTab(intent);
+    activeIntent = intent;
+  } else {
+    // already on this tab — nothing to settle
+    activeIntent = intent;
+  }
+  setMode('view');
+  renderTabs(); saveTabs();
+
+  const isCached = cachedIntents.has(intent) && !force;
+
+  // Fresh render: spin up a per-tab RenderState so other tabs aren't blocked
+  // and we can switch back to it while it's still in flight.
+  let state = null;
+  let jobId = null;
+  if (!isCached) {
+    state = new RenderState(intent);
+    tabRenderState.set(intent, state);
+    state.abort = new AbortController();
+    jobId = newJobId();
+    openProgressWS(intent, jobId);
+    mountOverlayForActiveTab();
+    renderTabs();    // show the spinner on the tab
+  } else {
+    showLoader(true, 'Loading view…', 'Restoring from cache');
+  }
+
+  try {
+    const url = `${API}/api/render?intent=${encodeURIComponent(intent)}${force ? '&force=true' : ''}${jobId ? `&job_id=${jobId}` : ''}`;
+    const res = await fetch(url, { headers: llmHeaders(), signal: state ? state.abort.signal : undefined });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+    showLoader(false);
+
+    if (state) { state.phase = 'done'; closeRenderState(intent); }
+
+    // Only paint into #view if the user is still looking at this tab.
+    if (intent === activeIntent) {
+      await renderHtml(data.html);
+      if (data.from_cache) {
+        setStatus('Loaded from cache ⚡', true);
+      } else if ((data.facts_count || 0) > 0) {
+        setStatus(`Generated fresh · ${data.facts_count} fact${data.facts_count === 1 ? '' : 's'} ✨`, true);
+      } else {
+        setStatus('No data extracted — all sources timed out or failed', true, 'amber');
+      }
+      setTimeout(() => setStatus('', false), 3500);
+    } else {
+      // User switched away — mark the tab so it shows a green "ready" dot.
+      const tab = tabs.find(t => t.intent === intent);
+      if (tab) tab._readyHtml = data.html;
+      renderTabs();
+    }
+    cachedIntents.add(intent);
+  } catch (e) {
+    showLoader(false);
+    if (state) { state.phase = 'error'; closeRenderState(intent); }
+    if (e.name === 'AbortError') return;
+    if (intent === activeIntent) {
+      setStatus('Error: ' + e.message, true, 'rose');
+    }
+  }
+}
+
+async function doEdit(instruction) {
+  if (!activeIntent) return;
+  showLoader(true, 'Refining your view…', 'Applying your edit');
+  try {
+    const res = await fetch(`${API}/api/edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...llmHeaders() },
+      body: JSON.stringify({ intent: activeIntent, instruction }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+    showLoader(false);
+    await renderHtml(data.html);
+    setStatus('Updated ✓', true);
+    setTimeout(() => setStatus('', false), 1500);
+  } catch (e) {
+    showLoader(false);
+    setStatus('Error: ' + e.message, true, 'rose');
+  }
+}
+
+// ── Request queue ──────────────────────────────────────────
+// Multiple submissions are processed strictly sequentially, so each
+// request sees the cache produced by the previous one. The agent's
+// per-tab session history grows with every completed task.
+function updateQueueBadge() {
+  const pending = queue.length + (queueRunning ? 0 : 0);
+  $('queue-count').textContent = queue.length;
+  $('queue-badge').classList.toggle('hidden', queue.length === 0);
+}
+
+async function runQueue() {
+  if (queueRunning) return;
+  queueRunning = true;
+  while (queue.length > 0) {
+    const task = queue.shift();
+    updateQueueBadge();
+    try {
+      if (task.kind === 'render') {
+        await doRender(task.intent, task.force);
+      } else {
+        // Bind edit to the intent the user typed at, not whatever is active now
+        activeIntent = task.intent;
+        setMode('view');
+        renderTabs();
+        await doEdit(task.instruction);
+      }
+    } catch (e) {
+      console.error('Queue task failed:', e);
+    }
+  }
+  queueRunning = false;
+  updateQueueBadge();
+}
+
+function enqueue(task) {
+  queue.push(task);
+  updateQueueBadge();
+  runQueue();
+}
+
+function submit() {
+  const v = $('prompt').value.trim();
+  if (!v) return;
+  $('prompt').value = '';
+  // Render-new vs edit-current depends on whether the active tab already has a view.
+  if (activeIntent && !isPlaceholder(activeIntent) && cachedIntents.has(activeIntent)) {
+    // Edits are tab-local and sequential within a tab — keep the queue for them.
+    enqueue({ kind: 'edit', intent: activeIntent, instruction: v });
+  } else {
+    // Fresh renders bypass the queue and run concurrently per tab.
+    doRender(v, false);
+  }
+}
+
+function newTab() {
+  const name = uniqueNewTabName();
+  tabs.push({ intent: name });
+  activeIntent = name;
+  setMode('hero');
+  $('view').innerHTML = '';
+  renderTabs(); saveTabs();
+  $('prompt').focus();
+}
+
+// ── Wire events ─────────────────────────────────────────────
+$('submit-btn').onclick = submit;
+$('prompt').addEventListener('keypress', e => { if (e.key === 'Enter') submit(); });
+$('prompt').addEventListener('input', () => {
+  if ($('prompt').value) stopTyping();
+  else if (currentMode === 'hero') startTyping();
+});
+$('force-btn').onclick = () => {
+  if (activeIntent && !isPlaceholder(activeIntent)) {
+    doRender(activeIntent, true);
+  }
+};
+$('new-tab').onclick = newTab;
+$('history-btn').onclick = () => toggleHistory();
+$('history-close').onclick = () => toggleHistory(false);
+$('history-backdrop').onclick = () => toggleHistory(false);
+$('history-clear').onclick = () => {
+  closedTabs.forEach(c => {
+    fetch(`${API}/api/cache?intent=${encodeURIComponent(c.intent)}`, { method: 'DELETE' }).catch(() => {});
+    cachedIntents.delete(c.intent);
+  });
+  closedTabs = [];
+  // Wipe server-side closed-tabs too.
+  fetch(`${API}/api/tabs/closed`, { method: 'DELETE' }).catch(() => {});
+  saveTabs();
+  renderHistory();
+};
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  // Close in priority order: preview > publish modal > history drawer > favorites itself
+  if (!$('preview-modal').classList.contains('hidden')) { closePreview(); return; }
+  if (!$('publish-modal').classList.contains('hidden')) { closePublishModal(); return; }
+  toggleHistory(false);
+  if (currentMode === 'favorites') closeFavorites();
+});
+$('favorites-btn').onclick = openFavorites;
+$('mp-close').onclick = closeFavorites;
+$('mp-search').addEventListener('input', (e) => { mpQuery = e.target.value; renderFavorites(); });
+$('publish-close').onclick = closePublishModal;
+$('publish-cancel').onclick = closePublishModal;
+$('publish-backdrop').onclick = closePublishModal;
+$('publish-btn').onclick = publishFromModal;
+$('preview-close').onclick = closePreview;
+$('preview-cancel').onclick = closePreview;
+$('preview-backdrop').onclick = closePreview;
+$('preview-install').onclick = () => {
+  const id = Number($('preview-modal').dataset.id);
+  if (!id) return;
+  closePreview();
+  openFavorite(id);
+};
+document.querySelectorAll('.suggest').forEach(btn => {
+  btn.onclick = () => {
+    const q = btn.dataset.q;
+    // URL chips go straight to a webview tab; intent chips go through the key gate.
+    const url = detectUrl(q);
+    if (url) { openUrlTab(url); return; }
+    if (!llmCreds || !llmCreds.apiKey) {
+      openSettings(true);
+      setStatus('Add an LLM key to render this suggestion', true, 'amber');
+      setTimeout(() => setStatus('', false), 2800);
+      return;
+    }
+    enqueue({ kind: 'render', intent: q, force: false });
+  };
+});
+
+// ── Initial state ───────────────────────────────────────────
+// Bootstrapping is async (loadTabs hits /api/tabs). Wait for BOTH tabs +
+// cache state before deciding what to show — otherwise we race and land in
+// view mode with nothing in it.
+(async function bootstrap() {
+  await Promise.all([loadTabs(), refreshCacheState()]);
+  renderTabs();
+
+  if (tabs.length === 0) {
+    newTab();                              // fresh session → a "New Tab"
+    return;
+  }
+  const active = tabs.find(t => t.intent === activeIntent) || tabs[0];
+  activeIntent = active.intent;
+  const isUrlTab  = active.kind === 'url';
+  const isCached  = cachedIntents.has(active.intent);
+  const isPlace   = isPlaceholder(active.intent);
+  if (isUrlTab || isCached || isPlace) {
+    switchTo(active.intent);               // safe to restore — no agent run
+  } else {
+    // Intent tab without cache: don't auto-render. Show the hero so the user
+    // decides whether to re-run it (clicking ↻ fires a render).
+    setMode('hero');
+    renderTabs();
+  }
+})();
+
+// ===========================================================================
+//  Agentic Browser additions: LLM creds, URL tabs, settings, live scrapers
+// ===========================================================================
+
+let llmCreds = null;           // { provider, apiKey, orchestratorModel?, scraperModel? }
+
+function llmHeaders() {
+  if (!llmCreds) return {};
+  const h = {
+    'X-LLM-Provider': llmCreds.provider,
+    'X-LLM-Key': llmCreds.apiKey,
+  };
+  if (llmCreds.orchestratorModel) h['X-Orchestrator-Model'] = llmCreds.orchestratorModel;
+  if (llmCreds.scraperModel)      h['X-Scraper-Model'] = llmCreds.scraperModel;
+  if (llmCreds.scrapeTimeout)     h['X-Scrape-Timeout'] = String(llmCreds.scrapeTimeout);
+  if (llmCreds.scrapeConcurrency) h['X-Scrape-Concurrency'] = String(llmCreds.scrapeConcurrency);
+  return h;
+}
+
+async function loadCreds() {
+  try {
+    if (IS_ELECTRON) {
+      llmCreds = await window.electronAPI.settings.get();
+    } else {
+      const raw = localStorage.getItem(SETTINGS_LS_KEY);
+      llmCreds = raw ? JSON.parse(raw) : null;
+    }
+  } catch { llmCreds = null; }
+  updateKeyChip();
+}
+
+async function saveCreds(creds) {
+  llmCreds = creds;
+  if (IS_ELECTRON) {
+    await window.electronAPI.settings.set(creds);
+  } else {
+    localStorage.setItem(SETTINGS_LS_KEY, JSON.stringify(creds));
+  }
+  updateKeyChip();
+}
+
+function updateKeyChip() {
+  const ready = !!(llmCreds && llmCreds.provider && llmCreds.apiKey);
+  const dot = $('settings-dot');
+  if (dot) dot.classList.toggle('hidden', ready);
+  const chip = $('needs-key-chip');
+  if (chip) chip.classList.toggle('hidden', ready);
+}
+
+// ── URL detection (heuristic — same shape as Chrome's omnibox) ─────────
+function detectUrl(input) {
+  const s = input.trim();
+  if (!s) return null;
+  if (/\s/.test(s)) return null;                                  // multi-word → intent
+  if (/^(https?|file|chrome):\/\//i.test(s)) return s;
+  if (/^[a-z]+:\/\//i.test(s)) return s;
+  // "localhost", "localhost:8080", IPs
+  if (/^localhost(:\d+)?(\/.*)?$/i.test(s)) return 'http://' + s;
+  if (/^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/.*)?$/.test(s)) return 'http://' + s;
+  // bare domain like "example.com/path"
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?(\/.*)?$/i.test(s)) return 'https://' + s;
+  return null;
+}
+
+// ── URL tabs (webview-backed) ────────────────────────────────
+const webviews = new Map();   // tabId → <webview> element
+
+function getOrCreateWebview(tab) {
+  let wv = webviews.get(tab.id);
+  if (wv) return wv;
+  if (IS_ELECTRON) {
+    wv = document.createElement('webview');
+    wv.setAttribute('src', tab.url);
+    wv.setAttribute('allowpopups', 'true');
+    wv.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; display:flex;';
+    wv.addEventListener('did-navigate', (e) => { tab.url = e.url; if (activeIntent === tab.intent) $('url-current').textContent = tab.url; saveTabs(); });
+    wv.addEventListener('did-navigate-in-page', (e) => { tab.url = e.url; if (activeIntent === tab.intent) $('url-current').textContent = tab.url; saveTabs(); });
+    wv.addEventListener('page-title-updated', (e) => { if (!tab.label) { tab.label = e.title; renderTabs(); saveTabs(); } });
+  } else {
+    // Web-app fallback: iframe (many sites refuse via X-Frame-Options — that's OK for the v0 demo).
+    wv = document.createElement('iframe');
+    wv.src = tab.url;
+    wv.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; border:0;';
+  }
+  $('url-container').appendChild(wv);
+  webviews.set(tab.id, wv);
+  return wv;
+}
+
+function showUrlTab(tab) {
+  setMode('url');
+  $('url-current').textContent = tab.url;
+  for (const [id, el] of webviews) {
+    el.style.display = (id === tab.id) ? 'flex' : 'none';
+  }
+  getOrCreateWebview(tab);
+}
+
+function destroyWebview(tabId) {
+  const wv = webviews.get(tabId);
+  if (wv) { try { wv.remove(); } catch {} webviews.delete(tabId); }
+}
+
+// Extend setMode to know about 'url'
+const _origSetMode = setMode;
+setMode = function (mode) {
+  if (mode === 'url') {
+    currentMode = 'url';
+    $('hero').classList.add('hidden');
+    $('view-shell').classList.add('hidden');
+    $('favorites-view').classList.add('hidden');
+    $('url-shell').classList.remove('hidden');
+    $('prompt').placeholder = 'Enter a URL or ask anything…';
+    $('submit-label').textContent = 'Go';
+    $('force-btn').classList.add('hidden');
+    $('input-card').classList.remove('input-ring');
+    stopTyping();
+    return;
+  }
+  $('url-shell').classList.add('hidden');
+  _origSetMode(mode);
+};
+
+// Extend switchTo: if tab is a URL tab, show webview.
+const _origSwitchTo = switchTo;
+switchTo = async function (intent) {
+  const tab = tabs.find(t => t.intent === intent);
+  if (tab && tab.kind === 'url') {
+    activeIntent = intent;
+    renderTabs(); saveTabs();
+    showUrlTab(tab);
+    return;
+  }
+  return _origSwitchTo(intent);
+};
+
+// Extend closeTab to also drop the webview if any.
+const _origCloseTab = closeTab;
+closeTab = function (intent) {
+  const tab = tabs.find(t => t.intent === intent);
+  if (tab && tab.id) destroyWebview(tab.id);
+  return _origCloseTab(intent);
+};
+
+function openUrlTab(url) {
+  const id = 'url-' + Math.random().toString(36).slice(2, 9);
+  const intent = url;  // intent slot doubles as the unique key
+  const tab = { id, kind: 'url', intent, url, label: hostname(url) };
+  // If the active tab is an empty placeholder, replace it in place.
+  if (isPlaceholder(activeIntent)) {
+    const placeholder = tabs.find(t => t.intent === activeIntent);
+    if (placeholder) {
+      Object.assign(placeholder, tab);
+    }
+  } else if (!tabs.find(t => t.intent === intent)) {
+    tabs.push(tab);
+  }
+  activeIntent = intent;
+  switchTo(intent);
+}
+
+function hostname(u) {
+  try { return new URL(u).hostname.replace(/^www\./, ''); }
+  catch { return u; }
+}
+
+// ── Override submit() to route URL vs intent + gate on key for intents ─
+const _origSubmit = submit;
+submit = function () {
+  const v = $('prompt').value.trim();
+  if (!v) return;
+  const url = detectUrl(v);
+  if (url) {
+    $('prompt').value = '';
+    openUrlTab(url);
+    return;
+  }
+  // Intent path requires creds.
+  if (!llmCreds || !llmCreds.apiKey) {
+    openSettings(/*highlight=*/true);
+    setStatus('Add an LLM key to render intents (or type a URL)', true, 'amber');
+    setTimeout(() => setStatus('', false), 3200);
+    return;
+  }
+  return _origSubmit();
+};
+
+// ── Per-tab render state ────────────────────────────────────
+// Each in-flight render lives in its own state object keyed by tab.intent.
+// Switching tabs repaints the overlay from that tab's state, so multiple
+// renders happen in parallel and never clobber each other.
+
+const TERMINAL_STATUSES = new Set(['ok','partial','failed','timeout','cache','dropped']);
+const SUCCESS_STATUSES = new Set(['ok','partial','cache']);
+const tabRenderState = new Map();   // intent → RenderState
+
+function newJobId() { return 'job-' + Math.random().toString(36).slice(2, 10); }
+
+function formatElapsed(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s/60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+class RenderState {
+  constructor(intent) {
+    this.intent = intent;
+    this.ws = null;
+    this.abort = null;
+    this.timerHandle = null;
+    this.startedAt = Date.now();
+    this.phase = 'planning';            // 'planning' | 'scraping' | 'synthesizing' | 'done' | 'cancelled' | 'error'
+    this.totalSources = 0;
+    this.doneTerminal = new Set();
+    this.successSources = new Set();
+    this.cards = new Map();             // job_url → {host, goal, step, shotB64, status, action, currentUrl, error, factCount}
+    this.finishedAt = null;
+  }
+  isInflight() { return this.ws !== null || this.abort !== null; }
+  doneCount() { return this.doneTerminal.size; }
+  successCount() { return this.successSources.size; }
+}
+
+function getOrCreateState(intent) {
+  let s = tabRenderState.get(intent);
+  if (!s) { s = new RenderState(intent); tabRenderState.set(intent, s); }
+  return s;
+}
+
+// ── Per-tab overlay (mounted into the view shell) ───────────
+// Builds an overlay DOM and binds events. Each call is fresh — we mount/
+// unmount on tab switch so the DOM tracks the active tab's state.
+function mountOverlayForActiveTab() {
+  const shell = $('view-shell');
+  if (!shell) return null;
+  // Remove any existing overlay
+  shell.querySelectorAll('.scrapers-overlay').forEach(el => el.remove());
+  const state = tabRenderState.get(activeIntent);
+  if (!state || !state.isInflight()) return null;
+  const tpl = $('scrapers-overlay-template');
+  const overlay = tpl.content.firstElementChild.cloneNode(true);
+  shell.appendChild(overlay);
+  overlay.querySelector('.scrapers-cancel').onclick = () => cancelRender(activeIntent);
+  paintOverlay(state, overlay);
+  // Start the per-tab elapsed timer (re-uses state.startedAt)
+  if (!state.timerHandle) {
+    const tick = () => {
+      if (!state.isInflight()) return;
+      const live = document.querySelector('#view-shell .scrapers-overlay .scrapers-elapsed');
+      if (live) live.textContent = formatElapsed(Date.now() - state.startedAt);
+    };
+    tick();
+    state.timerHandle = setInterval(tick, 500);
+  }
+  return overlay;
+}
+
+function paintOverlay(state, overlay) {
+  if (!overlay) overlay = document.querySelector('#view-shell .scrapers-overlay');
+  if (!overlay) return;
+  // Phase
+  const phaseEl = overlay.querySelector('.scrapers-phase');
+  if (phaseEl) {
+    phaseEl.textContent = ({
+      planning: 'Planning sub-agents…',
+      scraping: `Scraping ${state.totalSources || state.cards.size} sources in parallel…`,
+      synthesizing: 'Composing the view…',
+    }[state.phase] || 'Working…');
+  }
+  // Elapsed
+  const elEl = overlay.querySelector('.scrapers-elapsed');
+  if (elEl) elEl.textContent = formatElapsed(Date.now() - state.startedAt);
+  // Counter — show "K of N returned data" (honest), not "N of N done" (misleading).
+  const counterWrap = overlay.querySelector('.scrapers-done-counter');
+  if (counterWrap) {
+    if (state.totalSources > 0) {
+      counterWrap.classList.remove('hidden');
+      const allTerminal = state.doneCount() >= state.totalSources;
+      counterWrap.querySelector('.scrapers-done').textContent = String(
+        allTerminal ? state.successCount() : state.doneCount()
+      );
+      counterWrap.querySelector('.scrapers-total').textContent = String(state.totalSources);
+      const label = counterWrap.querySelector('.scrapers-done-label');
+      if (label) label.textContent = allTerminal ? ' returned data' : ' done';
+    } else {
+      counterWrap.classList.add('hidden');
+    }
+  }
+  // Grid
+  const grid = overlay.querySelector('.scrapers-grid');
+  grid.innerHTML = '';
+  for (const data of state.cards.values()) {
+    grid.appendChild(renderScraperCard(data));
+  }
+  // Show the 3-dot bouncer only while there are no cards yet (planning phase),
+  // hide as soon as the first scraper card lands.
+  const dots = overlay.querySelector('.scrapers-dots');
+  if (dots) dots.classList.toggle('hidden', state.cards.size > 0);
+  // Dim while synthesizing
+  if (state.phase === 'synthesizing') {
+    grid.querySelectorAll(':scope > *').forEach(el => el.classList.add('opacity-70'));
+  }
+}
+
+function renderScraperCard(d) {
+  const isDropped = d.status === 'dropped';
+  const card = document.createElement('div');
+  card.className = 'rounded-xl border bg-white overflow-hidden shadow-sm flex flex-col transition' +
+    ((d.status === 'failed' || d.status === 'timeout') ? ' ring-2 ring-rose-200 border-rose-100'
+      : isDropped ? ' border-dashed border-slate-300 opacity-60'
+      : ' border-slate-200');
+  const dotClass = ({
+    queued: 'bg-slate-300',
+    navigating: 'bg-indigo-500 animate-pulse',
+    reading: 'bg-violet-500 animate-pulse',
+    cache: 'bg-emerald-500',
+    ok: 'bg-emerald-500',
+    partial: 'bg-amber-500',
+    failed: 'bg-rose-500',
+    timeout: 'bg-rose-500',
+    dropped: 'bg-slate-400',
+  }[d.status] || 'bg-slate-300');
+  const facts  = (typeof d.factCount === 'number') ? ` · ${d.factCount} fact${d.factCount === 1 ? '' : 's'}` : '';
+  const errBit = d.error ? ' · ' + d.error : '';
+  const actBit = d.action ? ' · ' + d.action : (d.currentUrl ? ' · ' + hostname(d.currentUrl) : '');
+  const relevanceBit = isDropped && typeof d.relevanceScore === 'number'
+    ? ` · low relevance (${d.relevanceScore}/100)` : '';
+  const statusText = `${d.status || 'queued'}${actBit}${facts}${relevanceBit}${errBit}`;
+  card.innerHTML = `
+    <div class="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full shrink-0 ${dotClass}"></span>
+      <div class="flex-1 min-w-0">
+        <div class="text-[12px] font-medium text-slate-800 truncate">${escapeHtml(d.host || '')}</div>
+        <div class="text-[10px] text-slate-500 truncate">${escapeHtml(d.goal || '')}</div>
+      </div>
+      <span class="text-[10px] text-slate-400 font-mono shrink-0">step ${d.step || 0}</span>
+    </div>
+    <div class="flex-1 bg-slate-50 flex items-center justify-center min-h-[140px]">
+      ${d.shotB64
+        ? `<img alt="" class="block w-full h-full object-cover object-top" src="data:image/jpeg;base64,${d.shotB64}">`
+        : `<span class="text-[11px] text-slate-400">waiting…</span>`}
+    </div>
+    <div class="px-3 py-1 text-[10px] text-slate-500 truncate" title="${escapeHtml(d.error || statusText)}">${escapeHtml(statusText)}</div>
+  `;
+  return card;
+}
+
+function openProgressWS(intent, jobId) {
+  const state = getOrCreateState(intent);
+  const wsURL = (API || window.location.origin).replace(/^http/, 'ws') + `/api/ws/scrape/${jobId}`;
+  try {
+    state.ws = new WebSocket(wsURL);
+    state.ws.onmessage = (ev) => {
+      try { handleProgress(intent, JSON.parse(ev.data)); }
+      catch (err) { console.error('handleProgress threw:', err, ev.data); }
+    };
+    state.ws.onclose = () => { state.ws = null; };
+    state.ws.onerror = () => {};
+  } catch (e) {
+    console.warn('progress WS open failed:', e.message);
+  }
+}
+
+function closeRenderState(intent) {
+  const state = tabRenderState.get(intent);
+  if (!state) return;
+  if (state.ws)    { try { state.ws.close(); } catch {}; state.ws = null; }
+  if (state.timerHandle) { clearInterval(state.timerHandle); state.timerHandle = null; }
+  state.abort = null;
+  state.finishedAt = Date.now();
+  // If this is the active tab, unmount its overlay.
+  if (intent === activeIntent) {
+    const ov = document.querySelector('#view-shell .scrapers-overlay');
+    if (ov) ov.remove();
+  }
+  // Mark tab as no longer rendering (clear the pulsing dot)
+  renderTabs();
+}
+
+function cancelRender(intent) {
+  const state = tabRenderState.get(intent);
+  if (!state) return;
+  if (state.abort) { try { state.abort.abort(); } catch {} }
+  state.phase = 'cancelled';
+  closeRenderState(intent);
+  if (intent === activeIntent) {
+    setStatus('Cancelled', true, 'amber');
+    setTimeout(() => setStatus('', false), 1800);
+  }
+}
+
+function handleProgress(intent, e) {
+  const state = getOrCreateState(intent);
+
+  if (e.status === 'planning')      { state.phase = 'planning'; }
+  else if (e.status === 'planned')  { state.phase = 'scraping'; state.totalSources = e.fact_count || 0; }
+  else if (e.status === 'synthesizing') { state.phase = 'synthesizing'; }
+  else if (e.status === '__end__')  { return; /* render endpoint resolution closes things */ }
+  else if (e.job_url) {
+    let d = state.cards.get(e.job_url);
+    if (!d) {
+      d = { host: hostname(e.job_url), goal: '', step: 0 };
+      state.cards.set(e.job_url, d);
+    }
+    if (e.goal) d.goal = e.goal;
+    if (typeof e.step === 'number') d.step = e.step;
+    if (e.screenshot_b64) d.shotB64 = e.screenshot_b64;
+    if (e.action)   d.action = e.action;
+    if (e.current_url) d.currentUrl = e.current_url;
+    if (e.error)    d.error = e.error;
+    if (typeof e.fact_count === 'number') d.factCount = e.fact_count;
+    if (typeof e.relevance_score === 'number') d.relevanceScore = e.relevance_score;
+    d.status = e.status;
+    if (TERMINAL_STATUSES.has(e.status)) state.doneTerminal.add(e.job_url);
+    if (SUCCESS_STATUSES.has(e.status) && (e.fact_count || 0) > 0) {
+      state.successSources.add(e.job_url);
+    }
+  }
+
+  // Repaint only if THIS tab is the one the user is looking at right now.
+  if (intent === activeIntent) {
+    const overlay = document.querySelector('#view-shell .scrapers-overlay') || mountOverlayForActiveTab();
+    paintOverlay(state, overlay);
+  } else {
+    // Background tab is still rendering — repaint its tab strip indicator only.
+    renderTabs();
+  }
+}
+
+// ── Settings: Data & Storage pane ────────────────────────────
+function formatBytes(n) {
+  if (!n) return '0 B';
+  const u = ['B','KB','MB','GB']; let i = 0;
+  while (n >= 1024 && i < u.length-1) { n /= 1024; i++; }
+  return `${n.toFixed(n < 10 ? 1 : 0)} ${u[i]}`;
+}
+
+function setSettingsTab(pane) {
+  document.querySelectorAll('.settings-tab').forEach(b => {
+    const active = b.dataset.pane === pane;
+    b.classList.toggle('text-slate-900', active);
+    b.classList.toggle('border-slate-900', active);
+    b.classList.toggle('text-slate-500', !active);
+    b.classList.toggle('border-transparent', !active);
+  });
+  document.querySelectorAll('.settings-pane').forEach(p => {
+    p.classList.toggle('hidden', p.id !== `settings-pane-${pane}`);
+  });
+  if (pane === 'data') renderStoragePane();
+}
+
+async function renderStoragePane() {
+  const summary = $('storage-summary');
+  const viewsEl = $('storage-views');
+  const tabsEl  = $('storage-tabs');
+  summary.innerHTML = `<div class="text-xs text-slate-400 italic col-span-2">loading…</div>`;
+  viewsEl.innerHTML = `<div class="text-xs text-slate-400 italic">loading…</div>`;
+  tabsEl.innerHTML  = `<div class="text-xs text-slate-400 italic">loading…</div>`;
+  let s;
+  try {
+    const res = await fetch(`${API}/api/storage/stats`);
+    s = await res.json();
+  } catch (e) {
+    summary.innerHTML = `<div class="text-xs text-rose-600 col-span-2">Failed to load storage: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  summary.innerHTML = `
+    <div class="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5">
+      <div class="text-[11px] text-slate-500 uppercase tracking-wider">Total on disk</div>
+      <div class="text-lg font-semibold tabular-nums text-slate-900">${formatBytes(s.total_bytes)}</div>
+    </div>
+    <div class="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5">
+      <div class="text-[11px] text-slate-500 uppercase tracking-wider">Counts</div>
+      <div class="text-xs text-slate-700 leading-snug mt-0.5">
+        ${s.cached_views.count} views · ${s.tabs.count} open · ${s.closed_tabs.count} closed · ${s.favorites.count} favorites
+      </div>
+    </div>
+  `;
+  // Cached views
+  if (s.cached_views.count === 0) {
+    viewsEl.innerHTML = `<div class="text-xs text-slate-400 italic">No cached views yet.</div>`;
+  } else {
+    viewsEl.innerHTML = '';
+    for (const v of s.cached_views.items) {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2 group';
+      row.innerHTML = `
+        <div class="flex-1 min-w-0">
+          <div class="text-xs text-slate-800 truncate" title="${escapeHtml(v.intent)}">${escapeHtml(v.intent)}</div>
+          <div class="text-[10px] text-slate-400">${escapeHtml(v.updated_at)}</div>
+        </div>
+        <button class="text-[11px] text-slate-500 hover:text-slate-900 px-2 py-1 rounded hover:bg-slate-100" data-action="open">Open</button>
+        <button class="text-[11px] text-slate-400 hover:text-rose-600 px-2 py-1 rounded hover:bg-rose-50 opacity-0 group-hover:opacity-100" data-action="delete">Delete</button>
+      `;
+      row.querySelector('[data-action="open"]').onclick = () => {
+        closeSettings();
+        if (!tabs.find(t => t.intent === v.intent)) tabs.push({ intent: v.intent });
+        switchTo(v.intent);
+        saveTabs();
+      };
+      row.querySelector('[data-action="delete"]').onclick = async () => {
+        if (!confirm(`Delete cached view "${v.intent}"?`)) return;
+        await fetch(`${API}/api/cache?intent=${encodeURIComponent(v.intent)}`, { method: 'DELETE' });
+        cachedIntents.delete(v.intent);
+        renderTabs();
+        renderStoragePane();
+      };
+      viewsEl.appendChild(row);
+    }
+  }
+  // Open tabs
+  if (s.tabs.count === 0) {
+    tabsEl.innerHTML = `<div class="text-xs text-slate-400 italic">No tabs.</div>`;
+  } else {
+    tabsEl.innerHTML = tabs.map(t => `
+      <div class="text-xs text-slate-700 truncate flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full ${cachedIntents.has(t.intent) ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+        <span class="truncate" title="${escapeHtml(t.intent)}">${escapeHtml(t.label || t.intent)}</span>
+        ${t.kind === 'url' ? '<span class="text-[10px] text-slate-400">· URL</span>' : ''}
+      </div>
+    `).join('');
+  }
+  // Scrape cache
+  $('storage-scrape-count').textContent = `(${s.scrape_cache.count} entries)`;
+}
+
+async function doExportBackup() {
+  try {
+    const res = await fetch(`${API}/api/backup`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agentic-browser-backup-${new Date().toISOString().replace(/[:.]/g,'-')}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setStatus('Backup downloaded', true);
+    setTimeout(() => setStatus('', false), 1800);
+  } catch (e) {
+    setStatus('Export failed: ' + e.message, true, 'rose');
+  }
+}
+
+async function doImportBackup(file) {
+  if (!file) return;
+  const status = $('storage-import-status');
+  status.textContent = 'Uploading…';
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API}/api/restore`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+    status.textContent = `Restored ${data.restored.length} file(s). Reloading…`;
+    setTimeout(() => location.reload(), 800);
+  } catch (e) {
+    status.textContent = '✗ ' + (e.message || 'Failed');
+  }
+}
+
+// ── Settings modal ───────────────────────────────────────────
+function openSettings(highlight = false) {
+  const m = $('settings-modal');
+  m.classList.remove('hidden');
+  $('settings-backdrop').classList.remove('hidden');
+  requestAnimationFrame(() => {
+    $('settings-backdrop').classList.remove('opacity-0'); $('settings-backdrop').classList.add('opacity-100');
+    m.classList.remove('opacity-0', 'scale-95'); m.classList.add('opacity-100', 'scale-100');
+  });
+  if (llmCreds) {
+    $('settings-provider').value = llmCreds.provider || 'openai';
+    $('settings-key').value = llmCreds.apiKey || '';
+    $('settings-orch-model').value = llmCreds.orchestratorModel || '';
+    $('settings-scr-model').value  = llmCreds.scraperModel      || '';
+    $('settings-timeout').value     = llmCreds.scrapeTimeout     || '';
+    $('settings-concurrency').value = llmCreds.scrapeConcurrency || '';
+  }
+  if (highlight) $('settings-key').focus();
+  updateSettingsModelHints();
+}
+async function closeSettings() {
+  const apiKey = $('settings-key').value.trim();
+  if (apiKey) {
+    const timeout = parseInt($('settings-timeout').value, 10);
+    const concurrency = parseInt($('settings-concurrency').value, 10);
+    await saveCreds({
+      provider: $('settings-provider').value,
+      apiKey,
+      orchestratorModel: $('settings-orch-model').value.trim() || undefined,
+      scraperModel:      $('settings-scr-model').value.trim()  || undefined,
+      scrapeTimeout:     Number.isFinite(timeout) && timeout > 0 ? timeout : undefined,
+      scrapeConcurrency: Number.isFinite(concurrency) && concurrency > 0 ? concurrency : undefined,
+    });
+  }
+  const m = $('settings-modal');
+  $('settings-backdrop').classList.add('opacity-0'); $('settings-backdrop').classList.remove('opacity-100');
+  m.classList.add('opacity-0', 'scale-95'); m.classList.remove('opacity-100', 'scale-100');
+  setTimeout(() => { $('settings-backdrop').classList.add('hidden'); m.classList.add('hidden'); }, 180);
+}
+function updateSettingsModelHints() {
+  const p = $('settings-provider').value;
+  const hint = {
+    openai:    'orchestrator: gpt-5.1 (default) · scraper: gpt-4o-mini',
+    anthropic: 'orchestrator: claude-sonnet-4-6 (default, override to opus-4-7) · scraper: claude-haiku-4-5',
+    google:    'orchestrator: gemini-2.5-pro · scraper: gemini-2.5-flash',
+  }[p];
+  $('settings-hint').textContent = hint || '';
+}
+// ── Wiring ───────────────────────────────────────────────────
+$('settings-btn').onclick = () => openSettings();
+// Settings tab switching
+document.querySelectorAll('.settings-tab').forEach(btn => {
+  btn.onclick = () => setSettingsTab(btn.dataset.pane);
+});
+// Storage actions
+$('storage-export').onclick = doExportBackup;
+$('storage-import').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) doImportBackup(f);
+  e.target.value = '';     // allow re-uploading the same file
+});
+$('storage-clear-scrape').onclick = async () => {
+  if (!confirm('Clear all scrape-cache entries? This affects re-rendered views (they\'ll need to re-scrape).')) return;
+  await fetch(`${API}/api/storage/scrape-cache`, { method: 'DELETE' });
+  renderStoragePane();
+};
+// Rebind: the original code captured the pre-override submit() function ref.
+$('submit-btn').onclick = () => submit();
+// (Cancel is wired per-overlay in mountOverlayForActiveTab — each tab's
+// overlay has its own Cancel button bound to cancelRender(intent).)
+loadCreds();
+
+// ── Public API used by synthesizer-emitted HTML ──────────────
+// The synthesizer is instructed to use these for follow-up chips and
+// source-link clicks. They're intentionally permissive — silently no-op
+// if the input is malformed.
+window.askIntent = function (intent) {
+  if (typeof intent !== 'string' || !intent.trim()) return;
+  // Always spawn a NEW tab for follow-ups so we don't blow away the current view.
+  const name = uniqueNewTabName();
+  tabs.push({ intent: name });
+  activeIntent = name;
+  setMode('hero');
+  $('view').innerHTML = '';
+  renderTabs(); saveTabs();
+  // Route through submit's URL/intent + key gating.
+  $('prompt').value = intent.trim();
+  submit();
+};
+
+window.openExternal = function (url) {
+  if (typeof url !== 'string' || !/^https?:/i.test(url)) return;
+  if (IS_ELECTRON) {
+    // Open inside Agentic Browser as a URL tab, not in the system browser —
+    // user stays in the app and can come back via tab strip.
+    openUrlTab(url);
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+};
+
+// New-tab opens hero in URL mode by default — let user type a URL or an intent.
+// Hero suggestions remain intent-based — clicking one still goes through gating.
+
+// External-open button for URL tabs.
+$('url-open-external').onclick = () => {
+  const tab = tabs.find(t => t.intent === activeIntent);
+  if (!tab || !tab.url) return;
+  if (IS_ELECTRON) window.electronAPI.app.openExternal(tab.url);
+  else window.open(tab.url, '_blank');
+};
+
+// Restore URL tabs on load: webview is created lazily on first switch.
+</script>
+
+</body>
+</html>

@@ -1,0 +1,52 @@
+# ── Secrets ────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Python ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+backend/venv/
+
+# PyInstaller artifacts
+backend/build/
+backend/dist/
+backend/*.spec.bak
+
+# ── Node / Electron ────────────────────────────────────────────
+node_modules/
+shell/node_modules/
+
+# Electron-builder output + staging
+dist-installer/
+shell/staged/
+shell/build-wrapper/
+
+# Dev-host workaround binaries (built locally; rebuild via PyInstaller)
+shell/7za.exe
+
+# ── Runtime data (per-user databases, never source) ────────────
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+
+# ── Test / debug scratch ───────────────────────────────────────
+test-shots/
+.playwright-mcp/
+render-*.html
+hero-*.png
+mobile-*.png
+favorites-*.png
+topbar-*.png
+
+# ── OS / editor noise ──────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo

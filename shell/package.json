@@ -1,0 +1,65 @@
+{
+  "name": "agentic-browser-shell",
+  "productName": "Agentic Browser",
+  "version": "0.1.0",
+  "description": "Electron browser shell for Agentic Browser — unified URL+intent address bar, live sub-agents",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:no-backend": "AGENTIC_BACKEND_EXTERNAL=1 electron .",
+    "stage:chromium": "node stage-chromium.js",
+    "dist": "npm run stage:chromium && electron-builder"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.agenticbrowser.app",
+    "productName": "Agentic Browser",
+    "asar": true,
+    "directories": {
+      "output": "../dist-installer",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend",
+        "to": "frontend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/dist/agentic-backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "staged/ms-playwright",
+        "to": "ms-playwright",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "artifactName": "Agentic-Browser-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Agentic Browser",
+      "uninstallDisplayName": "Agentic Browser ${version}"
+    }
+  }
+}
